@@ -3,6 +3,59 @@ import random
 import enum
 import asyncio
 
+
+class MessageType(enum.Enum):
+    Msg_HoneyImHome = "imh"
+    Msg_StewReady = "swr"
+
+class Telegram:
+    def __init__(self,sender,receiverID,messagetype,dispatchtime,extrainfo):
+        self.sender = sender
+        self.receiverID = receiverID
+        self.messagetype = messagetype
+        self.dispatchtime = dispatchtime
+        self.extrainfo = extrainfo
+
+class EntityManager:
+    entityDictionary = {}
+
+    def registerEntity(self,newEntity):
+        self.entityDictionary[str(newEntity.id)] = newEntity
+        print("Entity registered " + str(newEntity.id))
+    
+    def getEntity(self,ID):
+        return self.entityDictionary[str(ID)]
+    
+    def deleteEntity(self,entity):
+        self.entityDictionary.pop(str(entity.id))
+
+    def updateEntities(self):
+        for key in self.entityDictionary:
+            self.entityDictionary[key].Update()
+
+class MessageDispatcher:
+    priorityQ  = []
+    
+    def Discharge(self,receiver,msg):
+        receiver.HandleMessage(msg) #TODO is this right?
+    
+    def DispatchMessage(self,sender,receiverID,msg,delay,extraInfo):
+        message = Telegram(sender,receiverID,msg,0,extraInfo)
+        receiverEntity = EntityManager.getEntity(EntityManager,receiverID)
+
+        if delay < 0:
+            self.Discharge(receiverEntity,message)
+        else:
+            message.dispatchtime = time.time + delay
+            self.priorityQ.append(message)
+    
+    def DispatchDelayedMessages(self):
+        while self.priorityQ[0].dispatchtime < time.time and self.priorityQ[0].dispatchtime > 0:
+            telegram = self.priorityQ[0]
+            receiver = EntityManager.getEntity(EntityManager,telegram.ID)
+            self.Discharge(receiver,telegram)
+            del self.priorityQ[0]
+
 class State:
     def Enter(self):
         assert 0,"[Debug]no enter method\n"
@@ -12,6 +65,9 @@ class State:
 
     def Exit(self):
         assert 0,"[Debug]no exit method\n"
+
+    def OnMessage(self,entity,telegram):
+        pass
 
 class Entity:
     id = 0
@@ -28,6 +84,9 @@ class Entity:
         return self.id
     
     def Update(self):
+        pass
+
+    def HandleMessage(self,telegram):
         pass
       
 class StateMachine:
@@ -66,7 +125,28 @@ class StateMachine:
     
     def setPreviousState(self,newState):
         self.previousState = newState
+
+    def HandleMessage(self,message):
+        if self.currentState != None and self.currentState.OnMessage(self.owner,message):
+            return True
+        
+        if self.globalState != None and self.globalState.OnMessage(self.owner,message):
+            return True
+        else:
+            return False
+
+class WaitForFood(State):
+    def Enter(self,miner):
+        print("Honey im home!")
+        miner.messenger.DispatchMessage(0,miner,"Wife",MessageType.Msg_HoneyImHome,0,None)
     
+    def Execute(self,miner):
+        pass
+
+
+        
+    
+        
 class DigForNuggs(State):
     def Enter(self,miner):
         if miner.location != "goldmine":
@@ -76,8 +156,8 @@ class DigForNuggs(State):
     def Execute(self,miner):
         miner.goldCarried += 2
         print("[Miner]one more nugget weoo")
-        miner.fatigue += 5
-        miner.thirst += 10
+        miner.fatigue += 15
+        miner.thirst += 25
         if miner.goldCarried > 10:
             miner.changeState(VisitBank())
             print("[Miner]gotta go bank")
@@ -85,7 +165,7 @@ class DigForNuggs(State):
             miner.changeState(QuenchThirst())
             print("[Miner]i need me slurp")
         elif miner.fatigue > 100:
-            miner.changeState(GoSleep())
+            miner.changeState(WaitForFood())
             print("[Miner]im tired!")
     def Exit(self,miner):
         print("[Miner]leaving the digsite")
@@ -145,29 +225,6 @@ class GoSleep(State):
     def Exit(self,miner):
         print("[Miner]Back to the mine!")
 
-class Miner(Entity):
-    # States
-    #-----------------
-    # DigForNuggs
-    # VisitBank
-    # QuenchThirst
-    # GoSleep
-    def __init__(self,IDValue):
-        self.setID(IDValue)
-        self.stateMachine = StateMachine(self)
-        self.stateMachine.setCurrentState(GoSleep())
-        self.location = "home"
-        self.goldCarried = 0
-        self.moneyInBank = 0
-        self.thirst = 0
-        self.fatigue = 0
-
-    def Update(self):
-        self.stateMachine.Update()
-
-    def changeState(self,newState):
-        self.stateMachine.ChangeState(newState)
-
 class MakeBed(State):
     def Enter(self,houseWife):
         print("[Wife]time to make the bed!")
@@ -196,7 +253,7 @@ class GoToBathroom(State):
         print("[Wife]need to use the ladies room")
     
     def Execute(self,houseWife):
-        print("[Wife]taking dump...")
+        print("[Wife]taking a huge DUMP...")
         houseWife.changeState(HouseWork())
         
     def Exit(self,houseWife):
@@ -227,10 +284,11 @@ class HouseWife(Entity):
     # - MopFloor
     # GoToBathroom
 
-    def __init__(self,IDValue):
+    def __init__(self,IDValue,Messenger):
         self.setID(IDValue)
         self.stateMachine = StateMachine(self)
         self.stateMachine.setCurrentState(HouseWork())
+        self.Messenger = Messenger
     
     def Update(self):
         self.stateMachine.Update()
@@ -238,61 +296,45 @@ class HouseWife(Entity):
     def changeState(self,newState):
         self.stateMachine.ChangeState(newState)
 
-class MessageType(enum.Enum):
-    Msg_HoneyImHome = "imh"
-    Msg_StewReady = "swr"
+    def HandleMessage(self,message):
+        return self.stateMachine.HandleMessage(message)
 
-class Telegram:
-    def __init__(self,sender,receiver,messagetype,dispatchtime,extrainfo):
-        self.sender = sender
-        self.receiver = receiver
-        self.messagetype = messagetype
-        self.dispatchtime = dispatchtime
-        self.extrainfo = extrainfo
+class Miner(Entity):
+    # States
+    #-----------------
+    # DigForNuggs
+    # VisitBank
+    # QuenchThirst
+    # GoSleep
+    def __init__(self,IDValue,Messenger):
+        self.setID(IDValue)
+        self.stateMachine = StateMachine(self)
+        self.stateMachine.setCurrentState(GoSleep())
+        self.location = "home"
+        self.goldCarried = 0
+        self.moneyInBank = 0
+        self.thirst = 0
+        self.fatigue = 0
+        self.Messenger = Messenger
 
-class EntityManager:
-    entityDictionary = {}
+    def Update(self):
+        self.stateMachine.Update()
 
-    def registerEntity(self,newEntity):
-        self.entityDictionary[str(newEntity.id)] = newEntity
+    def changeState(self,newState):
+        self.stateMachine.ChangeState(newState)
 
-    def getEntity(self,ID):
-        return self.entityDictionary[str(ID)]
-    
-    def deleteEntity(self,entity):
-        self.entityDictionary.pop(str(entity.id))
+    def HandleMessage(self,message):
+        return self.stateMachine.HandleMessage(message)
 
-class MessageDispatcher:
-    priorityQ  = []
-    
-    def Discharge(self,receiver,msg):
-        receiver.sendMessage(msg)
+messenger = MessageDispatcher()
+x = Miner("Miner",messenger)
+y = HouseWife("Wife",messenger)
+z = EntityManager()
+z.registerEntity(x)
+z.registerEntity(y)
 
-    def DispatchMessage(self,delay,sender,receiver,msg,extraInfo):
-        message = Telegram(sender,receiver,msg,0,extraInfo)
-        receiverEntity = EntityManager.getEntity(EntityManager,receiver.ID)
-
-        if delay < 0:
-            self.Discharge(receiverEntity,message)
-        else:
-            message.dispatchtime = time.time + delay
-            self.priorityQ.append(message)
-
-    def DispatchDelayedMessages(self):
-        while priorityQ[0].dispatchtime < time.time and priorityQ[0].dispatchtime > 0:
-            
-            
-
-
-
-
-
-
-x = Miner(123)
-y = HouseWife(124)
-
+#simple game loop updates 1 time per second
 while True:
-    x.Update()
-    y.Update()
+    z.updateEntities()
     time.sleep(1)
 
