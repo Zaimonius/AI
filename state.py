@@ -3,31 +3,37 @@ import random
 import enum
 import asyncio
 
-
 class MessageType(enum.Enum):
     Msg_HoneyImHome = "imh"
     Msg_StewReady = "swr"
 
+class Location(enum.Enum):
+    Loc_Mine = "mine"
+    Loc_Home = "home"
+    Loc_Bar = "bar"
+    Loc_Bank = "bank"
+
 class Telegram:
-    def __init__(self,sender,receiverID,messagetype,dispatchtime,extrainfo):
+    def __init__(self,sender,receiver,messagetype,dispatchtime,extrainfo):
         self.sender = sender
-        self.receiverID = receiverID
+        self.receiver = receiver
         self.messagetype = messagetype
         self.dispatchtime = dispatchtime
         self.extrainfo = extrainfo
 
 class EntityManager:
     entityDictionary = {}
-
-    def registerEntity(self,newEntity):
-        self.entityDictionary[str(newEntity.id)] = newEntity
-        print("Entity registered " + str(newEntity.id))
     
+    def registerEntity(self,newEntity):
+        self.entityDictionary[newEntity.id] = newEntity
+        newEntity.setManager(self)
+        print("Entity registered " + str(newEntity.id))
+    @staticmethod
     def getEntity(self,ID):
-        return self.entityDictionary[str(ID)]
+        return self.entityDictionary[ID]
     
     def deleteEntity(self,entity):
-        self.entityDictionary.pop(str(entity.id))
+        self.entityDictionary.pop(entity.id)
 
     def updateEntities(self):
         for key in self.entityDictionary:
@@ -37,24 +43,26 @@ class MessageDispatcher:
     priorityQ  = []
     
     def Discharge(self,receiver,msg):
-        receiver.HandleMessage(msg) #TODO is this right?
+        receiver.stateMachine.HandleMessage(msg)
     
-    def DispatchMessage(self,sender,receiverID,msg,delay,extraInfo):
-        message = Telegram(sender,receiverID,msg,0,extraInfo)
-        receiverEntity = EntityManager.getEntity(EntityManager,receiverID)
-
-        if delay < 0:
+    def DispatchMessage(self,senderID,receiverID,msg,delay,extraInfo,manager):
+        senderEntity = manager.getEntity(manager,senderID)
+        receiverEntity = manager.getEntity(manager,receiverID)
+        message = Telegram(senderEntity,receiverEntity,msg,0,extraInfo)
+        if delay <= 0:
             self.Discharge(receiverEntity,message)
         else:
-            message.dispatchtime = time.time + delay
+            message.dispatchtime = time.time() + delay
             self.priorityQ.append(message)
     
-    def DispatchDelayedMessages(self):
-        while self.priorityQ[0].dispatchtime < time.time and self.priorityQ[0].dispatchtime > 0:
-            telegram = self.priorityQ[0]
-            receiver = EntityManager.getEntity(EntityManager,telegram.ID)
-            self.Discharge(receiver,telegram)
-            del self.priorityQ[0]
+    def DispatchDelayedMessages(self,manager):
+        if self.priorityQ.__len__ == 0:
+            while self.priorityQ[0].dispatchtime < time.time() and self.priorityQ[0].dispatchtime > 0:
+                telegram = self.priorityQ[0]
+                receiver = manager.getEntity(manager,telegram.receiver.id)
+                self.Discharge(receiver,telegram)
+                del self.priorityQ[0]
+
 
 class State:
     def Enter(self):
@@ -67,7 +75,10 @@ class State:
         assert 0,"[Debug]no exit method\n"
 
     def OnMessage(self,entity,telegram):
-        pass
+        if telegram.messagetype == MessageType.Msg_HoneyImHome:
+            entity.setGlobalState(CookDinner())
+        if telegram.messagetype == MessageType.Msg_StewReady:
+            entity.setGlobalState(Eat())
 
 class Entity:
     id = 0
@@ -83,12 +94,16 @@ class Entity:
     def ID(self):
         return self.id
     
+    def setManager(self,manager):
+        self.manager = manager
+
     def Update(self):
         pass
 
     def HandleMessage(self,telegram):
         pass
-      
+
+
 class StateMachine:
     owner = None
     currentState = None
@@ -101,8 +116,7 @@ class StateMachine:
     def Update(self):
         if self.globalState != None:
             self.globalState.Execute(self.owner)
-        
-        if self.currentState != None:
+        elif self.currentState != None:
             self.currentState.Execute(self.owner)
 
     def ChangeState(self,newState):
@@ -135,18 +149,6 @@ class StateMachine:
         else:
             return False
 
-class WaitForFood(State):
-    def Enter(self,miner):
-        print("Honey im home!")
-        miner.messenger.DispatchMessage(0,miner,"Wife",MessageType.Msg_HoneyImHome,0,None)
-    
-    def Execute(self,miner):
-        pass
-
-
-        
-    
-        
 class DigForNuggs(State):
     def Enter(self,miner):
         if miner.location != "goldmine":
@@ -165,7 +167,7 @@ class DigForNuggs(State):
             miner.changeState(QuenchThirst())
             print("[Miner]i need me slurp")
         elif miner.fatigue > 100:
-            miner.changeState(WaitForFood())
+            miner.changeState(GoSleep())
             print("[Miner]im tired!")
     def Exit(self,miner):
         print("[Miner]leaving the digsite")
@@ -206,13 +208,40 @@ class QuenchThirst(State):
     def Exit(self,miner):
         print("[Miner]Whisky sure is nice")
         
+
+class Eat(State):
+    def Enter(self,miner):
+        print("[Miner]mmm smells nice")
+    
+    def Execute(self,miner):
+        print("[Miner]mmm delish")
+        miner.setGlobalState(None)
+    
+    def Exit(self,miner):
+        print("[Miner]thanks for the food")
+
+
+class CookDinner(State):
+    def Enter(self,houseWife):
+        print("[Wife]making the stew!")
+    
+    def Execute(self,houseWife):
+        print("[Wife]Stew is ready")
+        houseWife.messenger.DispatchMessage(houseWife.id,"Miner",MessageType.Msg_StewReady,0,None,houseWife.manager)
+        houseWife.setGlobalState(None)
+    
+    def Exit(self,houseWife):
+        print("[Wife]back to work!")
+
 class GoSleep(State):
     def Enter(self,miner):
-        if miner.location != "home":
-            miner.location = "home"
+        if miner.location != Location.Loc_Home:
+            miner.location = Location.Loc_Home
             print("[Miner]going home")
+            miner.changeState(GoSleep())
         else:
-            print("[Miner]going to sleep")
+            print("Honey im home!")
+            miner.messenger.DispatchMessage(miner.id,"Wife",MessageType.Msg_HoneyImHome,0,None,miner.manager)
     
     def Execute(self,miner):
         miner.fatigue = 0
@@ -284,11 +313,11 @@ class HouseWife(Entity):
     # - MopFloor
     # GoToBathroom
 
-    def __init__(self,IDValue,Messenger):
+    def __init__(self,IDValue,messenger):
         self.setID(IDValue)
         self.stateMachine = StateMachine(self)
         self.stateMachine.setCurrentState(HouseWork())
-        self.Messenger = Messenger
+        self.messenger = messenger
     
     def Update(self):
         self.stateMachine.Update()
@@ -298,6 +327,9 @@ class HouseWife(Entity):
 
     def HandleMessage(self,message):
         return self.stateMachine.HandleMessage(message)
+    
+    def setGlobalState(self,newState):
+        self.stateMachine.setGlobalState(newState)
 
 class Miner(Entity):
     # States
@@ -306,7 +338,7 @@ class Miner(Entity):
     # VisitBank
     # QuenchThirst
     # GoSleep
-    def __init__(self,IDValue,Messenger):
+    def __init__(self,IDValue,messenger):
         self.setID(IDValue)
         self.stateMachine = StateMachine(self)
         self.stateMachine.setCurrentState(GoSleep())
@@ -315,13 +347,16 @@ class Miner(Entity):
         self.moneyInBank = 0
         self.thirst = 0
         self.fatigue = 0
-        self.Messenger = Messenger
+        self.messenger = messenger
 
     def Update(self):
         self.stateMachine.Update()
 
     def changeState(self,newState):
         self.stateMachine.ChangeState(newState)
+    
+    def setGlobalState(self,newState):
+        self.stateMachine.setGlobalState(newState)
 
     def HandleMessage(self,message):
         return self.stateMachine.HandleMessage(message)
@@ -336,5 +371,6 @@ z.registerEntity(y)
 #simple game loop updates 1 time per second
 while True:
     z.updateEntities()
-    time.sleep(1)
+    messenger.DispatchDelayedMessages(z)
+    #time.sleep(1)
 
