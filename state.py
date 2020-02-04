@@ -2,362 +2,8 @@ import time
 import random
 import enum
 import asyncio
-
-class Telegram:
-    def __init__(self,sender,receiver,messagetype,dispatchtime,extrainfo):
-        self.sender = sender
-        self.receiver = receiver
-        self.messagetype = messagetype
-        self.dispatchtime = dispatchtime
-        self.extrainfo = extrainfo
-
-class EntityManager:
-    entityDictionary = {}
-    
-    def registerEntity(self,newEntity):
-        self.entityDictionary[newEntity.id] = newEntity
-        newEntity.setManager(self)
-        print("Entity registered " + str(newEntity.id))
-    @staticmethod
-    def getEntity(self,ID):
-        return self.entityDictionary[ID]
-
-    def deleteEntity(self,entity):
-        self.entityDictionary.pop(entity.id)
-
-    def updateEntities(self):
-        for key in self.entityDictionary:
-            if self.entityDictionary[key].stateMachine.currentState != None:
-                self.entityDictionary[key].Update()
-
-class MessageDispatcher:
-    priorityQ  = []
-    
-    def Discharge(self,receiver,msg):
-        receiver.stateMachine.HandleMessage(msg)
-    
-    def DispatchMessage(self,senderID,receiverID,msg,delay,extraInfo,manager):
-        senderEntity = manager.getEntity(manager,senderID)
-        receiverEntity = manager.getEntity(manager,receiverID)
-        message = Telegram(senderEntity,receiverEntity,msg,0,extraInfo)
-        if delay <= 0:
-            self.Discharge(receiverEntity,message)
-        else:
-            message.dispatchtime = time.time() + delay
-            self.priorityQ.append(message)
-    
-    def DispatchDelayedMessages(self,manager):
-        if self.priorityQ.__len__ == 0:
-            while self.priorityQ[0].dispatchtime < time.time() and self.priorityQ[0].dispatchtime > 0:
-                telegram = self.priorityQ[0]
-                receiver = manager.getEntity(manager,telegram.receiver.id)
-                self.Discharge(receiver,telegram)
-                del self.priorityQ[0]
-
-class State:
-    def Enter(self):
-        assert 0,"[Debug]no enter method\n"
-
-    def Execute(self):
-        assert 0,"[Debug]no execute method\n"
-
-    def Exit(self):
-        assert 0,"[Debug]no exit method\n"
-
-    def OnMessage(self,entity,telegram):
-        if telegram.messagetype == MessageType.Msg_HoneyImHome:
-            entity.setGlobalState(CookDinner())
-        if telegram.messagetype == MessageType.Msg_StewReady:
-            entity.setGlobalState(EatFood())
-
-class Entity:
-    id = 0
-    nextValidID = None
-
-    def setID(self,value):
-        self.id = value
-        print("Entity id set " + str(value))
-
-    def __init__(self,idNumber):
-        self.setID(idNumber)
-
-    def ID(self):
-        return self.id
-    
-    def setManager(self,manager):
-        self.manager = manager
-
-    def Update(self):
-        pass
-
-    def HandleMessage(self,telegram):
-        pass
-
-class StateMachine:
-    owner = None
-    currentState = None
-    previousState = None
-    globalState = None
-
-    def __init__(self,ownerIn):
-        self.owner = ownerIn
-
-    def Update(self):
-        if self.globalState != None:
-            self.globalState.Execute(self.owner)
-        elif self.currentState != None:
-            self.currentState.Execute(self.owner)
-
-    def ChangeState(self,newState):
-        assert newState, "newState is not ok"
-        self.previousState = self.currentState
-        self.currentState.Exit(self.owner)
-        self.currentState = newState
-        self.currentState.Enter(self.owner)
-
-    def revertState(self):
-        self.ChangeState(self.previousState)
-    
-    def setCurrentState(self,newState):
-        self.currentState = newState
-    
-    
-    def setGlobalState(self,newState):
-        self.globalState = newState
-    
-    
-    def setPreviousState(self,newState):
-        self.previousState = newState
-
-    def HandleMessage(self,message):
-        if self.currentState != None and self.currentState.OnMessage(self.owner,message):
-            return True
-        
-        if self.globalState != None and self.globalState.OnMessage(self.owner,message):
-            return True
-        else:
-            return False
-
-#miner and wife states
-class DigForNuggs(State):
-    def Enter(self,miner):
-        if miner.location != "goldmine":
-            print("[Miner]no goldmine, aww man")
-            miner.location = "goldmine"
-    
-    def Execute(self,miner):
-        miner.goldCarried += 2
-        print("[Miner]one more nugget weoo")
-        miner.fatigue += 15
-        miner.thirst += 25
-        if miner.goldCarried > 10:
-            miner.changeState(VisitBank())
-            print("[Miner]gotta go bank")
-        elif miner.thirst > 100:
-            miner.changeState(QuenchThirst())
-            print("[Miner]i need me slurp")
-        elif miner.fatigue > 100:
-            miner.changeState(GoSleep())
-            print("[Miner]im tired!")
-    def Exit(self,miner):
-        print("[Miner]leaving the digsite")
-
-class VisitBank(State):
-    def Enter(self,miner):
-            if miner.location != "bank":
-                print("[Miner]going to bank!")
-                miner.location = "bank"
-        
-    def Execute(self,miner):
-        miner.moneyInBank += miner.goldCarried
-        miner.goldCarried = 0
-        if miner.fatigue == 100:
-            miner.changeState(GoSleep())
-            print("[Miner]im tired!")
-        else:
-            miner.changeState(DigForNuggs())
-            print("[Miner]back to work")
-        
-    def Exit(self,miner):
-        print("[Miner]leaving bank naow")
-        
-class QuenchThirst(State):
-    def Enter(self,miner):
-        if miner.location != "saloon":
-            print("[Miner]gotta quench the thirst")
-            miner.location = "saloon"
-
-    def Execute(self,miner):
-        miner.thirst = 0
-        print("[Miner]ahhhhh")
-        if miner.fatigue == 10:
-            miner.changeState(GoSleep())
-        else:
-            miner.changeState(DigForNuggs())
-        
-    def Exit(self,miner):
-        print("[Miner]Whisky sure is nice")
-        
-
-class EatFood(State):
-    def Enter(self,miner):
-        print("[Miner]mmm smells nice")
-    
-    def Execute(self,miner):
-        print("[Miner]mmm delish")
-        miner.setGlobalState(None)
-    
-    def Exit(self,miner):
-        print("[Miner]thanks for the food")
-
-
-class CookDinner(State):
-    def Enter(self,houseWife):
-        print("[Wife]making the stew!")
-    
-    def Execute(self,houseWife):
-        print("[Wife]Stew is ready")
-        houseWife.messenger.DispatchMessage(houseWife.id,"Miner",MessageType.Msg_StewReady,0,None,houseWife.manager)
-        houseWife.setGlobalState(None)
-    
-    def Exit(self,houseWife):
-        print("[Wife]back to work!")
-
-class GoSleep(State):
-    def Enter(self,miner):
-        if miner.location != Location.Loc_Home:
-            miner.location = Location.Loc_Home
-            print("[Miner]going home")
-            miner.changeState(GoSleep())
-        else:
-            print("Honey im home!")
-            miner.messenger.DispatchMessage(miner.id,"Wife",MessageType.Msg_HoneyImHome,0,None,miner.manager)
-    
-    def Execute(self,miner):
-        miner.fatigue = 0
-        print("[Miner]zzz")
-        if miner.thirst > 10:
-            miner.changeState(QuenchThirst())
-        else:
-            miner.changeState(DigForNuggs())
-
-    def Exit(self,miner):
-        print("[Miner]Back to the mine!")
-
-class MakeBed(State):
-    def Enter(self,houseWife):
-        print("[Wife]time to make the bed!")
-    
-    def Execute(self,houseWife):
-        print("[Wife]making the bed...")
-        houseWife.changeState(HouseWork())
-        
-    def Exit(self,houseWife):
-        print("[Wife]bed made!")
-
-class MopFloor(State):
-    def Enter(self,houseWife):
-        print("[Wife]time to mop the floor!")
-    
-    def Execute(self,houseWife):
-        print("[Wife]mopping the floor...")
-        houseWife.changeState(HouseWork())
-
-        
-    def Exit(self,houseWife):
-        print("[Wife]floor mopped!")
-    
-class GoToBathroom(State):
-    def Enter(self,houseWife):
-        print("[Wife]need to use the ladies room")
-    
-    def Execute(self,houseWife):
-        print("[Wife]taking a huge DUMP...")
-        houseWife.changeState(HouseWork())
-        
-    def Exit(self,houseWife):
-        print("[Wife]dump complete!")
-
-class HouseWork(State):
-    def Enter(self,houseWife):
-        print("[Wife]time to the next chore!")
-    
-    def Execute(self,houseWife):
-        chore = random.randint(0,1)
-        toilet = random.randint(0,10)
-        if toilet == 1:
-            houseWife.changeState(GoToBathroom())
-        if chore == 0:
-            houseWife.changeState(MakeBed())
-        else:
-            houseWife.changeState(MopFloor())
-        
-    def Exit(self,houseWife):
-        print("[Wife]Phew!")
-#wife class
-class HouseWife(Entity):
-    # States
-    #-----------------
-    # HouseWork
-    # - MakeBed
-    # - MopFloor
-    # GoToBathroom
-
-    def __init__(self,IDValue,messenger):
-        self.setID(IDValue)
-        self.stateMachine = StateMachine(self)
-        self.stateMachine.setCurrentState(HouseWork())
-        self.messenger = messenger
-    
-    def Update(self):
-        self.stateMachine.Update()
-
-    def changeState(self,newState):
-        self.stateMachine.ChangeState(newState)
-
-    def HandleMessage(self,message):
-        return self.stateMachine.HandleMessage(message)
-    
-    def setGlobalState(self,newState):
-        self.stateMachine.setGlobalState(newState)
-#miner class
-class Miner(Entity):
-    # States
-    #-----------------
-    # DigForNuggs
-    # VisitBank
-    # QuenchThirst
-    # GoSleep
-    def __init__(self,IDValue,messenger):
-        self.setID(IDValue)
-        self.stateMachine = StateMachine(self)
-        self.stateMachine.setCurrentState(GoSleep())
-        self.location = "home"
-        self.goldCarried = 0
-        self.moneyInBank = 0
-        self.thirst = 0
-        self.fatigue = 0
-        self.messenger = messenger
-
-    def Update(self):
-        self.stateMachine.Update()
-
-    def changeState(self,newState):
-        self.stateMachine.ChangeState(newState)
-    
-    def setGlobalState(self,newState):
-        self.stateMachine.setGlobalState(newState)
-
-    def HandleMessage(self,message):
-        return self.stateMachine.HandleMessage(message)
-
-
-
-
-
 #lab classes
 
-
 class Telegram:
     def __init__(self,sender,receiver,messagetype,dispatchtime,extrainfo):
         self.sender = sender
@@ -377,13 +23,16 @@ class EntityManager:
     def getEntity(self,ID):
         return self.entityDictionary[ID]
     
-    def deleteEntity(self,entity):
-        self.entityDictionary.pop(entity.id)
+    def deleteEntity(self,entitityKey):
+        del self.entityDictionary[entitityKey]
 
     def updateEntities(self):
-        for key in self.entityDictionary:
+        for key in list(self.entityDictionary):
             if self.entityDictionary[key].stateMachine.currentState != None:
-                self.entityDictionary[key].Update()
+                if self.entityDictionary[key].Dead():
+                    self.deleteEntity(key)
+                else:
+                    self.entityDictionary[key].Update()
 
 class MessageDispatcher:
     priorityQ  = []
@@ -421,12 +70,20 @@ class State:
 
     def OnMessage(self,entity,telegram):
         if telegram.messagetype == MessageType.Msg_Yes:
-            entity.addFriendComing()
+            telegram.senderEntity.addFriendComing()
+        if telegram.messagetype == MessageType.Msg_No:
+            telegram.senderEntity.addFriendNotComing()
         if telegram.messagetype == MessageType.Msg_ImHere:
-            entity.addFriendHere()
+            telegram.senderEntity.addFriendHere()
         if telegram.messagetype == MessageType.Msg_Meetup:
-            telegram.extrainfo
-            entity.setGlobalState()
+            if entity.fatigue > 70 or entity.thirst > 70 or entity.hunger > 70:
+                print("Text message["+str(entity.id)+"] Cant come!")
+                entity.messenger.DispatchMessage(entity.id,telegram.senderEntity.id,MessageType.Msg_No,0,0,entity.messenger)
+            else:
+                print("Text message["+str(entity.id)+"] I can come!")
+                entity.messenger.DispatchMessage(entity.id,telegram.senderEntity.id,MessageType.Msg_Yes,0,0,entity.messenger)
+                entity.host = telegram.senderEntity
+                entity.changeState(MeetUp())
 
 class Entity:
     id = 0
@@ -475,15 +132,15 @@ class StateMachine:
 
     def revertState(self):
         self.ChangeState(self.previousState)
-    
+
     def setCurrentState(self,newState):
         self.currentState = newState
-    
-    
+
+
     def setGlobalState(self,newState):
         self.globalState = newState
-    
-    
+
+
     def setPreviousState(self,newState):
         self.previousState = newState
 
@@ -517,29 +174,146 @@ class Location(enum.Enum):
     Loc_Mall = "mall"
 
 
-
 #state classes for persons
+class MeetUp(State):
+    def Enter(self,person):
+        print("["+str(person.id)+"] Meeting the mates")
+    
+    def Execute(self,person):
+        person.messenger.DispatchMessage(person.id,person.host.id,MessageType.Msg_ImHere,0,0,person.messenger)
+        if person.hunger > 100 or person.thirst > 100 or person.fatigue > 100:
+            person.changeState(Dead())
+            print("["+str(person.id)+"] Dieded")
+        elif person.fatigue > 85:
+            print("["+str(person.id)+"] Gotta go, im tired")
+        elif person.thirst > 85:
+            print("["+str(person.id)+"] Gotta go, im thirsty")
+            person.changeState(Drink())
+        elif person.hunger > 85:
+            print("["+str(person.id)+"] Gotta go, im hungry")
+            person.changeState(Eat())
+        else:
+            print("["+str(person.id)+"]Chatting to friends")
+            person.changeState(AtHome())
+    
+    def Exit(self,person):
+        print("["+str(person.id)+"] Thanks for the company")
 
-class Waiting(State):
+class Drink(State):
+    def Enter(self,person):
+        print("["+str(person.id)+"] To the bar!")
+    
+    def Execute(self,person):
+        print("["+str(person.id)+"] Slurp, drink and stuff")
+        person.thirst = 0
+        if person.hunger > 100 or person.thirst > 100 or person.fatigue > 100:
+            person.changeState(Dead())
+            
+            print("["+str(person.id)+"] Dieded")
+        elif person.fatigue > 85:
+            print("["+str(person.id)+"] Im sleepy")
+            person.changeState(AtHome())
+        elif person.hunger > 85:
+            print("["+str(person.id)+"] Im hungry!")
+            person.changeState(Eat())
+        else:
+            print("["+str(person.id)+"] Gotta get back to work!")
+            person.revertState()
+
+    def Exit(self,person):
+        print("["+str(person.id)+"] done dirnking")
+
+class Eat(State):
     def Enter(self,person):
         print("["+str(person.id)+"] sweet sweet home")
     
     def Execute(self,person):
+        print("["+str(person.id)+"] Much monch very eat")
+        person.hunger = 0
         if person.hunger > 100 or person.thirst > 100 or person.fatigue > 100:
-            person.changeState(None)
+            person.changeState(Dead())
             print("["+str(person.id)+"] Dieded")
-        elif person.fatigue > 90:
-            print("["+str(person.id)+"] zzz")
-            person.fatigue = 0
-        elif person.thirst > 90:
+        elif person.fatigue > 85:
+            print("["+str(person.id)+"] Im sleepy")
+            person.changeState(AtHome())
+        elif person.thirst > 85:
             print("["+str(person.id)+"] Im thirsty!")
             person.changeState(Drink())
-        elif person.hunger > 90:
+
+    def Exit(self,person):
+        print("["+str(person.id)+"] Very good meal")
+
+class Job1(State):
+    def Enter(self,person):
+        print("["+str(person.id)+"] Back to work!")
+
+    def Execute(self,person):
+        print("["+str(person.id)+"]getting the moneys at LTU")
+        person.money += person.moneyGain
+        if person.hunger > 100 or person.thirst > 100 or person.fatigue > 100:
+            person.changeState(Dead())
+            print("["+str(person.id)+"] Dieded")
+        elif person.fatigue > 85:
+            print("["+str(person.id)+"] Im sleepy")
+            person.changeState(AtHome())
+        elif person.thirst > 85:
+            print("["+str(person.id)+"] Im thirsty!")
+            person.changeState(Drink())
+        elif person.hunger > 85:
+            person.changeState(Eat())
+        elif person.money > 2000:
+            person.changeState(GoShop())
+
+    def Exit(self,person):
+        print("["+str(person.id)+"] Work done for now!")
+
+class Job2(State):
+    def Enter(self,person):
+        print("["+str(person.id)+"] Back to work!")
+
+    def Execute(self,person):
+        print("["+str(person.id)+"]getting the moneys at SFCS")
+        person.money += person.moneyGain
+        if person.hunger > 100 or person.thirst > 100 or person.fatigue > 100:
+            person.changeState(Dead())
+            print("["+str(person.id)+"] Dieded")
+        elif person.fatigue > 85:
+            print("["+str(person.id)+"] Im sleepy")
+            person.changeState(AtHome())
+        elif person.thirst > 85:
+            print("["+str(person.id)+"] Im thirsty!")
+            person.changeState(Drink())
+        elif person.hunger > 85:
+            person.changeState(Eat())
+        elif person.money > 2000:
+            person.changeState(GoShop())
+
+    def Exit(self,person):
+        print("["+str(person.id)+"] work done for now!")
+
+class GoShop(State):
+    def Enter(self,person):
+        print("["+str(person.id)+"] shopping time!")
+
+    def Execute(self,person):
+        print("["+str(person.id)+"] shoppinggg")
+        if person.hunger > 100 or person.thirst > 100 or person.fatigue > 100:
+            person.changeState(Dead())
+            print("["+str(person.id)+"] Dieded")
+        elif person.fatigue > 85:
+            print("["+str(person.id)+"] zzz")
+            person.fatigue = 0
+        elif person.thirst > 85:
+            print("["+str(person.id)+"] Im thirsty!")
+            person.changeState(Drink())
+        elif person.hunger > 85:
             print("["+str(person.id)+"] Im hungry!")
             person.changeState(Eat())
-        elif person.money > 1000:
-            print("["+str(person.id)+"] Shopping time!")
-            person.changeState(GoShop())
+        else:
+            person.money -= 2000
+            person.items.append("spade")
+            person.changeState(AtHome())
+        
 
     def Exit(self,person):
         print("["+str(person.id)+"] something")
@@ -549,51 +323,59 @@ class AtHome(State):
         print("["+str(person.id)+"] sweet sweet home")
     
     def Execute(self,person):
+        print("["+str(person.id)+"] zzz")
+        person.fatigue = 0
         if person.hunger > 100 or person.thirst > 100 or person.fatigue > 100:
-            person.changeState(None)
+            person.changeState(Dead())
             print("["+str(person.id)+"] Dieded")
-        elif person.fatigue > 90:
-            print("["+str(person.id)+"] zzz")
-            person.fatigue = 0
-        elif person.thirst > 90:
+        elif person.thirst > 85:
             print("["+str(person.id)+"] Im thirsty!")
             person.changeState(Drink())
-        elif person.hunger > 90:
+        elif person.hunger > 85:
             print("["+str(person.id)+"] Im hungry!")
             person.changeState(Eat())
-        elif person.money > 1000:
+        elif person.money > 2000:
             print("["+str(person.id)+"] Shopping time!")
             person.changeState(GoShop())
-        elif 
-
-        chore = random.randint(0,1)
-        toilet = random.randint(0,10)
-        if toilet == 1:
-            person.changeState(GoToBathroom())
-        if chore == 0:
-            person.changeState(MakeBed())
         else:
-            person.changeState(MopFloor())
+            job = random.randint(0,2)
+            if job == 1:
+                person.changeState(Job1())
+            elif job == 2:
+                person.changeState(Job2())
+            else:
+                #meetup
+                pass
 
     def Exit(self,person):
-        print("["+str(person.id)+"] something")
+        print("["+str(person.id)+"] leaving home")
 
+class Dead(State):
+    def Enter(self,person):
+        print("["+str(person.id)+"] is entering heaven")
+    
+    def Execute(self,person):
+        person.dead = 1
+        print("["+str(person.id)+"]Goodbye Earth!")
 
 #person class
 class Person(Entity):
-    
     # States
     #-----------------
     # AtHome
     # GoShop
-    # 
+    # MeetUp
     # Drink
     # Eat
+    # Job1
+    # Job2
+    # Dead
     #-----------------
-    def __init__(self,IDValue,messenger,moneyGain,fatigueGain,thirstGain,hungerGain):
+
+    def __init__(self,IDValue,startState,messenger,moneyGain,fatigueGain,thirstGain,hungerGain):
         self.setID(IDValue)
         self.stateMachine = StateMachine(self)
-        self.stateMachine.setCurrentState(AtHome())
+        self.stateMachine.setCurrentState(startState)
         self.location = Location.Loc_Home
         self.hunger = 0
         self.thirst = 0
@@ -604,25 +386,54 @@ class Person(Entity):
         self.fatigueGain = fatigueGain
         self.thirstGain = thirstGain
         self.hungerGain = hungerGain
+        self.friendsHere = 0
+        self.friendsComing = 0
+        self.host = None
+        self.items = []
+        self.dead = 0
 
     def Update(self):
         self.stateMachine.Update()
-        hunger += hungerGain
-        thirst += thirstGain
-        fatigue += fatigueGain
+        self.hunger += self.hungerGain
+        self.thirst += self.thirstGain
+        self.fatigue += self.fatigueGain
 
     def changeState(self,newState):
         self.stateMachine.ChangeState(newState)
     
     def setGlobalState(self,newState):
         self.stateMachine.setGlobalState(newState)
+    
+    def revertState(self):
+        self.stateMachine.revertState()
+
+    def Dead(self):
+        if self.dead == 1:
+            return True
+        else:
+            return False
 
     def HandleMessage(self,message):
         return self.stateMachine.HandleMessage(message)
+    
+    def addFriendComing(self):
+        self.friendsComing += 1
+    
+    def addFriendNotComing(self):
+        self.friendsComing -= 1
+    
+    def addFriendHere(self):
+        self.friendsHere += 1
+    
+    def friendLeft(self):
+        self.friendsHere -= 1
+
+
 messenger = MessageDispatcher()
-x = Miner("Miner",messenger)
-y = HouseWife("Wife",messenger)
+x = Person("Gary",AtHome(),messenger,254,9,7,8)
+y = Person("Liz",Job1(),messenger,321,8,7,9)
 z = EntityManager()
+
 z.registerEntity(x)
 z.registerEntity(y)
 
