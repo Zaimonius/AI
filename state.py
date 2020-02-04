@@ -22,10 +22,10 @@ class EntityManager:
     def registerEntity(self,newEntity):
         self.entityDictionary[str(newEntity.id)] = newEntity
         print("Entity registered " + str(newEntity.id))
-    
+
     def getEntity(self,ID):
         return self.entityDictionary[str(ID)]
-    
+
     def deleteEntity(self,entity):
         self.entityDictionary.pop(str(entity.id))
 
