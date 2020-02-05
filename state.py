@@ -57,8 +57,19 @@ class MessageDispatcher:
                 receiver = manager.getEntity(manager,telegram.receiver.id)
                 self.Discharge(receiver,telegram)
                 del self.priorityQ[0]
+    
+    def DispatchToAll(self,sender,msg,delay,extraInfo,manager):
+        for person in list(manager.entityDictionary.values()):
+            if person != sender:
+                message = Telegram(sender,person,msg,0,extraInfo)
+                self.Discharge(person,message)
+
 
 class State:
+    #state base class
+
+    #pure virtual methods
+    #makes sure that the methods are implemented
     def Enter(self):
         assert 0,"[Debug]no enter method\n"
 
@@ -67,24 +78,23 @@ class State:
 
     def Exit(self):
         assert 0,"[Debug]no exit method\n"
-
+    #message handling in the states
     def OnMessage(self,entity,telegram):
         if telegram.messagetype == MessageType.Msg_Yes:
-            telegram.senderEntity.addFriendComing()
-        if telegram.messagetype == MessageType.Msg_No:
-            telegram.senderEntity.addFriendNotComing()
-        if telegram.messagetype == MessageType.Msg_ImHere:
-            telegram.senderEntity.addFriendHere()
+            entity.meetingList.append(telegram.sender)
         if telegram.messagetype == MessageType.Msg_Meetup:
             if entity.fatigue > 70 or entity.thirst > 70 or entity.hunger > 70:
                 print("Text message["+str(entity.id)+"] Cant come!")
-                entity.messenger.DispatchMessage(entity.id,telegram.senderEntity.id,MessageType.Msg_No,0,0,entity.messenger)
+                entity.messenger.DispatchMessage(entity.id,telegram.sender.id,MessageType.Msg_No,0,telegram.extrainfo,entity.manager)
             else:
                 print("Text message["+str(entity.id)+"] I can come!")
-                entity.messenger.DispatchMessage(entity.id,telegram.senderEntity.id,MessageType.Msg_Yes,0,0,entity.messenger)
-                entity.host = telegram.senderEntity
+                entity.messenger.DispatchMessage(entity.id,telegram.sender.id,MessageType.Msg_Yes,0,telegram.extrainfo,entity.manager)
+                entity.meetingList = telegram.extrainfo
                 entity.changeState(MeetUp())
+        if telegram.messagetype == MessageType.Msg_CakeReady:
+            pass # TODO  SSSADSADASDSA
 
+        
 class Entity:
     id = 0
     nextValidID = None
@@ -161,6 +171,7 @@ class MessageType(enum.Enum):
     Msg_Yes = "y"
     Msg_No = "n"
     Msg_ImHere = "here"
+    Msg_CakeReady = "cakerdy"
 
 class Location(enum.Enum):
     #Location enums
@@ -178,26 +189,38 @@ class Location(enum.Enum):
 class MeetUp(State):
     def Enter(self,person):
         print("["+str(person.id)+"] Meeting the mates")
-    
+
     def Execute(self,person):
-        person.messenger.DispatchMessage(person.id,person.host.id,MessageType.Msg_ImHere,0,0,person.messenger)
+
         if person.hunger > 100 or person.thirst > 100 or person.fatigue > 100:
             person.changeState(Dead())
             print("["+str(person.id)+"] Dieded")
+            self.Scatter(person.meetingList)
+            print("[Group] Rip " + str(person.id))
         elif person.fatigue > 85:
             print("["+str(person.id)+"] Gotta go, im tired")
+            person.changeState(AtHome())
+            self.Scatter(person.meetingList)
         elif person.thirst > 85:
             print("["+str(person.id)+"] Gotta go, im thirsty")
             person.changeState(Drink())
+            self.Scatter(person.meetingList)
         elif person.hunger > 85:
             print("["+str(person.id)+"] Gotta go, im hungry")
             person.changeState(Eat())
+            self.Scatter(person.meetingList)
         else:
             print("["+str(person.id)+"]Chatting to friends")
-            person.changeState(AtHome())
-    
+
+
     def Exit(self,person):
         print("["+str(person.id)+"] Thanks for the company")
+
+
+    def Scatter(self,meetingList):
+        for person in list(meetingList):
+            person.changeState(AtHome())
+            person.meetingList = []
 
 class Drink(State):
     def Enter(self,person):
@@ -208,7 +231,6 @@ class Drink(State):
         person.thirst = 0
         if person.hunger > 100 or person.thirst > 100 or person.fatigue > 100:
             person.changeState(Dead())
-            
             print("["+str(person.id)+"] Dieded")
         elif person.fatigue > 85:
             print("["+str(person.id)+"] Im sleepy")
@@ -218,10 +240,14 @@ class Drink(State):
             person.changeState(Eat())
         else:
             print("["+str(person.id)+"] Gotta get back to work!")
-            person.revertState()
+            job = random.randint(0,2)
+            if job == 1:
+                person.changeState(Job1())
+            elif job == 2:
+                person.changeState(Job2())
 
     def Exit(self,person):
-        print("["+str(person.id)+"] done dirnking")
+        print("["+str(person.id)+"] done dirnking - HICCUP!")
 
 class Eat(State):
     def Enter(self,person):
@@ -318,6 +344,17 @@ class GoShop(State):
     def Exit(self,person):
         print("["+str(person.id)+"] something")
 
+class Bake(State):
+    def Enter(self,person):
+        print("["+str(person.id)+"] sweet sweet home")
+    
+    def Execute(self,person):
+        print("["+str(person.id)+"] In the oven you go!")
+        person.messenger.DispatchMessage(person.id,person.id,MessageType.Msg_CakeReady,5,None,person.manager)
+    
+    def Exit(self,person):
+        print("["+str(person.id)+"] leaving home")
+
 class AtHome(State):
     def Enter(self,person):
         print("["+str(person.id)+"] sweet sweet home")
@@ -343,9 +380,22 @@ class AtHome(State):
                 person.changeState(Job1())
             elif job == 2:
                 person.changeState(Job2())
+            elif job == 0:
+                person.changeState(Bake())
             else:
-                #meetup
-                pass
+                if len(person.manager.entityDictionary) == 1:
+                    pass
+                else:
+                    person.meetingList.append(person)
+                    print("Text message["+str(person.id)+"] Meetup?")
+                    person.messenger.DispatchToAll(person,MessageType.Msg_Meetup,0,person.meetingList,person.manager)
+                    if len(person.meetingList) == 1:
+                        print("["+str(person.id)+"]aw mann noone wants do do anything :(")
+                        person.meetingList = []
+                    else:
+                        person.changeState(MeetUp())
+                        person.meetingList = []
+
 
     def Exit(self,person):
         print("["+str(person.id)+"] leaving home")
@@ -386,10 +436,8 @@ class Person(Entity):
         self.fatigueGain = fatigueGain
         self.thirstGain = thirstGain
         self.hungerGain = hungerGain
-        self.friendsHere = 0
-        self.friendsComing = 0
-        self.host = None
         self.items = []
+        self.meetingList = []
         self.dead = 0
 
     def Update(self):
@@ -415,28 +463,20 @@ class Person(Entity):
 
     def HandleMessage(self,message):
         return self.stateMachine.HandleMessage(message)
-    
-    def addFriendComing(self):
-        self.friendsComing += 1
-    
-    def addFriendNotComing(self):
-        self.friendsComing -= 1
-    
-    def addFriendHere(self):
-        self.friendsHere += 1
-    
-    def friendLeft(self):
-        self.friendsHere -= 1
+
 
 
 messenger = MessageDispatcher()
-x = Person("Gary",AtHome(),messenger,254,9,7,8)
-y = Person("Liz",Job1(),messenger,321,8,7,9)
+x = Person("Gary",AtHome(),messenger,254,9,7,18)
+y = Person("Liz",Job1(),messenger,321,8,13,9)
+t = Person("Paul",Job2(),messenger,415,13,7,6)
+r = Person("Mary",Drink(),messenger,213,4,16,6)
 z = EntityManager()
 
 z.registerEntity(x)
 z.registerEntity(y)
-
+z.registerEntity(t)
+z.registerEntity(r)
 #simple game loop updates 1 time per second
 while True:
     z.updateEntities()
