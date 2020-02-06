@@ -197,35 +197,36 @@ class Location(enum.Enum):
     Loc_Mall = "mall"
 
 #state classes for persons
+
 class MeetUp(State):
     def Enter(self,person):
-        print("["+str(person.id)+"] Meeting the mates")
+        print(str(timer) + "["+str(person.id)+"] Meeting the mates")
     #meeting with friends class
     #if they get hungry or sleepy or thirsty they go resolve their needs
     #if they dont need to go they just hang out until someone does
     def Execute(self,person):
         if person.hunger > 100 or person.thirst > 100 or person.fatigue > 100:
             person.changeState(Dead())
-            print("["+str(person.id)+"] Dieded")
+            print(str(timer) + "["+str(person.id)+"] Dieded")
             self.Scatter(person.meetingList)
             print("[Group] Rip " + str(person.id))
         elif person.fatigue > 85:
-            print("["+str(person.id)+"] Gotta go, im tired")
+            print(str(timer) + "["+str(person.id)+"] Gotta go, im tired")
             person.changeState(Sleep())
             self.Scatter(person.meetingList)
         elif person.thirst > 85:
-            print("["+str(person.id)+"] Gotta go, im thirsty")
+            print(str(timer) + "["+str(person.id)+"] Gotta go, im thirsty")
             person.changeState(Drink())
             self.Scatter(person.meetingList)
         elif person.hunger > 85:
-            print("["+str(person.id)+"] Gotta go, im hungry")
+            print(str(timer) + "["+str(person.id)+"] Gotta go, im hungry")
             person.changeState(Eat())
             self.Scatter(person.meetingList)
         else:
-            print("["+str(person.id)+"] Chatting to friends")
+            print(str(timer) + "["+str(person.id)+"] Chatting to friends")
 
     def Exit(self,person):
-        print("["+str(person.id)+"] Thanks for the company")
+        print(str(timer) + "["+str(person.id)+"] Thanks for the company")
 
     #If one of the entities go home they all go home and clears the meeting list
     def Scatter(self,meetingList):
@@ -235,22 +236,22 @@ class MeetUp(State):
 
 class Drink(State):
     def Enter(self,person):
-        print("["+str(person.id)+"] To the bar!")
+        print(str(timer) + "["+str(person.id)+"] To the bar!")
     #refills thirst and then does whatever they need after that
     def Execute(self,person):
-        print("["+str(person.id)+"] Slurp, drink and stuff")
+        print(str(timer) + "["+str(person.id)+"] Slurp, drink and stuff")
         person.thirst = 0
         if person.hunger > 100 or person.thirst > 100 or person.fatigue > 100:
             person.changeState(Dead())
-            print("["+str(person.id)+"] Dieded")
+            print(str(timer) + "["+str(person.id)+"] Dieded")
         elif person.fatigue > 85:
-            print("["+str(person.id)+"] Im sleepy")
+            print(str(timer) + "["+str(person.id)+"] Im sleepy")
             person.changeState(Sleep())
         elif person.hunger > 85:
-            print("["+str(person.id)+"] Im hungry!")
+            print(str(timer) + "["+str(person.id)+"] Im hungry!")
             person.changeState(Eat())
         else:
-            print("["+str(person.id)+"] Gotta get back to work!")
+            print(str(timer) + "["+str(person.id)+"] Gotta get back to work!")
             job = random.randint(0,2)
             if job == 1:
                 person.changeState(Job1())
@@ -258,26 +259,26 @@ class Drink(State):
                 person.changeState(Job2())
 
     def Exit(self,person):
-        print("["+str(person.id)+"] done dirnking - HICCUP!")
+        print(str(timer) + "["+str(person.id)+"] done dirnking - HICCUP!")
 
 class Eat(State):
     def Enter(self,person):
-        print("["+str(person.id)+"] sweet sweet home")
+        print(str(timer) + "["+str(person.id)+"] sweet sweet home")
     #refills hunger and does someting else thereafter
     def Execute(self,person):
-        print("["+str(person.id)+"] Much monch very eat")
+        print(str(timer) + "["+str(person.id)+"] Much monch very eat")
         person.hunger = 0
         if person.hunger > 100 or person.thirst > 100 or person.fatigue > 100:
             person.changeState(Dead())
-            print("["+str(person.id)+"] Dieded")
+            print(str(timer) + "["+str(person.id)+"] Dieded")
         elif person.fatigue > 85:
-            print("["+str(person.id)+"] Im sleepy")
+            print(str(timer) + "["+str(person.id)+"] Im sleepy")
             person.changeState(Sleep())
         elif person.thirst > 85:
-            print("["+str(person.id)+"] Im thirsty!")
+            print(str(timer) + "["+str(person.id)+"] Im thirsty!")
             person.changeState(Drink())
         else:
-            print("["+str(person.id)+"] Gotta get back to work!")
+            print(str(timer) + "["+str(person.id)+"] Gotta get back to work!")
             job = random.randint(0,2)
             if job == 1:
                 person.changeState(Job1())
@@ -285,23 +286,23 @@ class Eat(State):
                 person.changeState(Job2())
 
     def Exit(self,person):
-        print("["+str(person.id)+"] Very good meal")
+        print(str(timer) + "["+str(person.id)+"] Very good meal")
 
 class Job1(State):
     def Enter(self,person):
-        print("["+str(person.id)+"] Back to work!")
+        print(str(timer) + "["+str(person.id)+"] Back to work!")
     #works until something else happens
     def Execute(self,person):
-        print("["+str(person.id)+"] getting the moneys at LTU")
+        print(str(timer) + "["+str(person.id)+"] getting the moneys at LTU")
         person.money += person.moneyGain
         if person.hunger > 100 or person.thirst > 100 or person.fatigue > 100:
             person.changeState(Dead())
-            print("["+str(person.id)+"] Dieded")
+            print(str(timer) + "["+str(person.id)+"] Dieded")
         elif person.fatigue > 85:
-            print("["+str(person.id)+"] Im sleepy")
+            print(str(timer) + "["+str(person.id)+"] Im sleepy")
             person.changeState(Sleep())
         elif person.thirst > 85:
-            print("["+str(person.id)+"] Im thirsty!")
+            print(str(timer) + "["+str(person.id)+"] Im thirsty!")
             person.changeState(Drink())
         elif person.hunger > 85:
             person.changeState(Eat())
@@ -309,23 +310,23 @@ class Job1(State):
             person.changeState(GoShop())
 
     def Exit(self,person):
-        print("["+str(person.id)+"] Work done for now!")
+        print(str(timer) + "["+str(person.id)+"] Work done for now!")
 
 class Job2(State):
     def Enter(self,person):
-        print("["+str(person.id)+"] Back to work!")
+        print(str(timer) + "["+str(person.id)+"] Back to work!")
     #works until something else happens
     def Execute(self,person):
-        print("["+str(person.id)+"] getting the moneys at SFCS")
+        print(str(timer) + "["+str(person.id)+"] getting the moneys at SFCS")
         person.money += person.moneyGain
         if person.hunger > 100 or person.thirst > 100 or person.fatigue > 100:
             person.changeState(Dead())
-            print("["+str(person.id)+"] Dieded")
+            print(str(timer) + "["+str(person.id)+"] Dieded")
         elif person.fatigue > 85:
-            print("["+str(person.id)+"] Im sleepy")
+            print(str(timer) + "["+str(person.id)+"] Im sleepy")
             person.changeState(Sleep())
         elif person.thirst > 85:
-            print("["+str(person.id)+"] Im thirsty!")
+            print(str(timer) + "["+str(person.id)+"] Im thirsty!")
             person.changeState(Drink())
         elif person.hunger > 85:
             person.changeState(Eat())
@@ -333,68 +334,68 @@ class Job2(State):
             person.changeState(GoShop())
 
     def Exit(self,person):
-        print("["+str(person.id)+"] work done for now!")
+        print(str(timer) + "["+str(person.id)+"] work done for now!")
 
 class GoShop(State):
     def Enter(self,person):
-        print("["+str(person.id)+"] shopping time!")
+        print(str(timer) + "["+str(person.id)+"] shopping time!")
     #the person goes and buys a spade!
     def Execute(self,person):
-        print("["+str(person.id)+"] shoppinggg")
+        print(str(timer) + "["+str(person.id)+"] shoppinggg")
         person.money -= 2000
         person.items.append("spade")
         person.changeState(Sleep())
 
     def Exit(self,person):
-        print("["+str(person.id)+"] done shopping")
+        print(str(timer) + "["+str(person.id)+"] done shopping")
 
 class Bake(State):
     def Enter(self,person):
-        print("["+str(person.id)+"] cake baking time!")
+        print(str(timer) + "["+str(person.id)+"] cake baking time!")
     #the person puts a cake in the oven and sends a delayed message ot himself when it is ready
     def Execute(self,person):
-        print("["+str(person.id)+"] In the oven you go!")
+        print(str(timer) + "["+str(person.id)+"] In the oven you go!")
         person.messenger.DispatchMessage(person.id,person.id,MessageType.Msg_CakeReady,2,None,person.manager)
         person.changeState(Sleep())
     
     def Exit(self,person):
-        print("["+str(person.id)+"] See ya later cake!")
+        print(str(timer) + "["+str(person.id)+"] See ya later cake!")
 
 class TakeOutCake(State):
     def Enter(self,person):
-        print("["+str(person.id)+"] time to take cake out of owen!")
+        print(str(timer) + "["+str(person.id)+"] time to take cake out of owen!")
     #the person takes the cake out of the oven and achieves cake!
     def Execute(self,person):
-        print("["+str(person.id)+"] smells nice!")
+        print(str(timer) + "["+str(person.id)+"] smells nice!")
         person.items.append("cake")
         person.changeState(Sleep())
     
     def Exit(self,person):
-        print("["+str(person.id)+"] cake done!")
+        print(str(timer) + "["+str(person.id)+"] cake done!")
 
 class Sleep(State):
     def Enter(self,person):
-        print("["+str(person.id)+"] sweet sweet home")
+        print(str(timer) + "["+str(person.id)+"] sweet sweet home")
     #this is the home state
     #first it replenishes all your energy and then you dec ide what you are going to do depending on multiple factors
     def Execute(self,person):
-        print("["+str(person.id)+"] zzz")
+        print(str(timer) + "["+str(person.id)+"] zzz")
         person.fatigue = 0
         #if a person is too high in any stat, they die
         if person.hunger > 100 or person.thirst > 100 or person.fatigue > 100:
             person.changeState(Dead())
-            print("["+str(person.id)+"] Dieded")
+            print(str(timer) + "["+str(person.id)+"] Dieded")
         #if a person is thirsty it drinks
         elif person.thirst > 85:
-            print("["+str(person.id)+"] Im thirsty!")
+            print(str(timer) + "["+str(person.id)+"] Im thirsty!")
             person.changeState(Drink())
         #if a person is hungry it eats
         elif person.hunger > 85:
-            print("["+str(person.id)+"] Im hungry!")
+            print(str(timer) + "["+str(person.id)+"] Im hungry!")
             person.changeState(Eat())
         #if a person is has much money it spends it on spades!!!
         elif person.money > 2000:
-            print("["+str(person.id)+"] Shopping time!")
+            print(str(timer) + "["+str(person.id)+"] Shopping time!")
             person.changeState(GoShop())
         else:
             #if not any of the above it chooses randomly wha to do
@@ -415,21 +416,21 @@ class Sleep(State):
                     print("Text message["+str(person.id)+"] Meetup?")
                     person.messenger.DispatchToAll(person,MessageType.Msg_Meetup,0,person.meetingList,person.manager)
                     if len(person.meetingList) == 1:
-                        print("["+str(person.id)+"] aw mann noone wants do do anything :(")
+                        print(str(timer) + "["+str(person.id)+"] aw mann noone wants do do anything :(")
                         person.meetingList = []
                     else:
                         person.changeState(MeetUp())
     
     def Exit(self,person):
-        print("["+str(person.id)+"] leaving home")
+        print(str(timer) + "["+str(person.id)+"] leaving home")
 
 class Dead(State):
     def Enter(self,person):
-        print("["+str(person.id)+"] is entering heaven")
+        print(str(timer) + "["+str(person.id)+"] is entering heaven")
     #if a person dies he changes his dead value to 1 and the entitymanager decides to delete him
     def Execute(self,person):
         person.dead = True
-        print("["+str(person.id)+"] Goodbye Earth!")
+        print(str(timer) + "["+str(person.id)+"] Goodbye Earth!")
 
 #person class
 class Person(Entity):
@@ -517,7 +518,12 @@ z.registerEntity(r)
 #simple game loop updates the entites and sends dealyed message 1 time per 2 seconds
 #can be tweaked if too fast i guess, need to implement a clock for a nicer look
 #if needed just remove sleep to make it super fast
+timer = 7
 while True:
     z.updateEntities()
     messenger.DispatchDelayedMessages()
     time.sleep(2)
+    timer += 1
+    if timer == 24:
+        timer = 0
+    print(timer)
