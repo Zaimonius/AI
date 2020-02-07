@@ -503,9 +503,9 @@ class Person(Entity):
 #messenger creation
 messenger = MessageDispatcher()
 #entities creation
-x = Person("Gary",Sleep(),messenger,254,9,7,8)
-y = Person("Liz",Job1(),messenger,321,8,6,3)
-t = Person("Paul",Eat(),messenger,415,5,7,6)
+x = Person("Gary",Sleep(),messenger,254,3,7,5)
+y = Person("Liz",Job1(),messenger,321,5,6,3)
+t = Person("Paul",Eat(),messenger,415,5,4,6)
 r = Person("Mary",Drink(),messenger,213,4,3,6)
 #creating the entititymanger
 z = EntityManager()
