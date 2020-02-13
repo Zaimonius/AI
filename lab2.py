@@ -19,6 +19,7 @@ class Grid: #https://www.youtube.com/watch?v=e3gbNOl4DiM
         # the directions that the agent can move in
         self.directions = [vec(1, 0), vec(0, -1), vec(-1, 0), vec(0, -1)]
         self.running = False
+        self.player = vec()
 
     
     def inBounds(self, node):
@@ -40,6 +41,8 @@ class Grid: #https://www.youtube.com/watch?v=e3gbNOl4DiM
         for wall in self.walls:
             rect = pygame.Rect(wall * tilesize, (tilesize, tilesize))
             pygame.draw.rect(self.screen, lightgray, rect)
+        rect2 = pygame.Rect(self.player * tilesize, (tilesize, tilesize))
+        pygame.draw.rect(self.screen, red, rect2)
 
     def drawGrid(self):
         for x in range(0, self.width, tilesize):
@@ -75,15 +78,18 @@ class Grid: #https://www.youtube.com/watch?v=e3gbNOl4DiM
                         f.close()
                         print("map saved")
                     if event.key == pygame.K_l:
-                        g.loadDrawn()
+                        self.loadDrawn()
                         print("map loaded")
                 if event.type == pygame.MOUSEBUTTONDOWN:
-                    wallpos = vec(pygame.mouse.get_pos()) // tilesize
+                    mousePos = vec(pygame.mouse.get_pos()) // tilesize
                     if event.button == 1:
-                        if wallpos in g.walls:
-                            g.walls.remove(wallpos)
+                        if mousePos in self.walls:
+                            g.walls.remove(mousePos)
                         else:
-                            g.walls.append(wallpos)
+                            g.walls.append(mousePos)
+                if event.type == pygame.MOUSEBUTTONDOWN and event.type == pygame.K_p:
+                    if event.button == 1:
+                        self.player = [mousePos]
             pygame.display.set_caption("{:.2f}".format(g.clock.get_fps()))
             g.screen.fill(darkgray)
             g.drawGrid()
