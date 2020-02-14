@@ -2,11 +2,12 @@ import pygame
 import time
 from lab2settings import *
 import ast
+from collections import *
 vec = pygame.math.Vector2
 
 
 class Grid: #https://www.youtube.com/watch?v=e3gbNOl4DiM
-    def __init__(self, gridwidth, gridheight):
+    def __init__(self, gridwidth, gridheight, agentpos):
         pygame.init()
         self.screen = pygame.display.set_mode((gridwidth * tilesize, gridheight * tilesize))
         self.clock = pygame.time.Clock()
@@ -19,16 +20,15 @@ class Grid: #https://www.youtube.com/watch?v=e3gbNOl4DiM
         # the directions that the agent can move in
         self.directions = [vec(1, 0), vec(0, -1), vec(-1, 0), vec(0, -1)]
         self.running = False
-        self.player = vec()
+        self.player = agentpos
 
-    
     def inBounds(self, node):
         return 0 <= node.x < self.width and 0 <= node.y < self.height
 
     def passable(self, node):
         return node not in self.walls
 
-    def findNeighbors(self, node):
+    def findNeighbors(self, node): #denna är fel atm
         neighbors = []
         for direction in self.directions:
             neighbors.append(node + direction)
@@ -36,6 +36,7 @@ class Grid: #https://www.youtube.com/watch?v=e3gbNOl4DiM
             if not self.passable(neighbor) and not self.inBounds(neighbor):
                 neighbors.remove(neighbor)
         print(neighbors)
+        return neighbors
 
     def draw(self):
         for wall in self.walls:
@@ -49,15 +50,33 @@ class Grid: #https://www.youtube.com/watch?v=e3gbNOl4DiM
             pygame.draw.line(self.screen, lightgray, (x, 0), (x, self.height))
         for y in range(0, self.width, tilesize):
             pygame.draw.line(self.screen, lightgray, (0, y), (self.width, y))
-    
+
     def loadDrawn(self):
-        f = open("drawnmap.txt","r")
+        f = open("drawnmap.txt", "r")
         wallList = f.readline()
         if wallList != "":
             wallPairs = ast.literal_eval(wallList)
             for wall in wallPairs:
                 self.walls.append(vec(wall[0], wall[1]))
         f.close()
+
+    def vec2int(self, vect):
+        return (int(vect.x), int(vect.y))
+
+    def bradthFirstSearch(self, startNode):
+        frontier = deque()
+        frontier.append(startNode)
+        path = {}
+        path[self.vec2int(start)] = None
+        while len(frontier) > 0:
+            current = frontier.popleft()
+            for next in self.findNeighbors(current):
+                if self.vec2int(next) not in path:
+                    frontier.append(next)
+                    path[next] = current - next
+        print(path)
+
+
 
     def run(self):
         self.running = True
@@ -87,9 +106,6 @@ class Grid: #https://www.youtube.com/watch?v=e3gbNOl4DiM
                             g.walls.remove(mousePos)
                         else:
                             g.walls.append(mousePos)
-                if event.type == pygame.MOUSEBUTTONDOWN and event.type == pygame.K_p:
-                    if event.button == 1:
-                        self.player = [mousePos]
             pygame.display.set_caption("{:.2f}".format(g.clock.get_fps()))
             g.screen.fill(darkgray)
             g.drawGrid()
@@ -97,5 +113,9 @@ class Grid: #https://www.youtube.com/watch?v=e3gbNOl4DiM
             pygame.display.flip()
 
 
-g = Grid(10,10)
+
+start = vec(5,5)
+g = Grid(10,10,start)
+g.findNeighbors(vec(0,0))
+#g.bradthFirstSearch(start)
 g.run()
