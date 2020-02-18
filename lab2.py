@@ -6,6 +6,7 @@ from collections import *
 vec = pygame.math.Vector2
 
 
+
 class Grid: #https://www.youtube.com/watch?v=e3gbNOl4DiM
     def __init__(self, gridwidth, gridheight, agentpos):
         pygame.init()
@@ -21,9 +22,11 @@ class Grid: #https://www.youtube.com/watch?v=e3gbNOl4DiM
         self.directions = [vec(1, 0), vec(0, -1), vec(-1, 0), vec(0, -1)]
         self.running = False
         self.player = agentpos
+        self.gridwidth = gridwidth
+        self.gridheight = gridheight
 
     def inBounds(self, node):
-        return 0 <= node.x < self.width and 0 <= node.y < self.height
+        return 0 <= node.x < self.gridwidth and 0 <= node.y < self.gridheight
 
     def passable(self, node):
         return node not in self.walls
@@ -33,7 +36,7 @@ class Grid: #https://www.youtube.com/watch?v=e3gbNOl4DiM
         for direction in self.directions:
             neighbors.append(node + direction)
         for neighbor in neighbors:
-            if not self.passable(neighbor) and not self.inBounds(neighbor):
+            if self.passable(neighbor) and self.inBounds(neighbor):
                 neighbors.remove(neighbor)
         print(neighbors)
         return neighbors
@@ -63,18 +66,19 @@ class Grid: #https://www.youtube.com/watch?v=e3gbNOl4DiM
     def vec2int(self, vect):
         return (int(vect.x), int(vect.y))
 
-    def bradthFirstSearch(self, startNode):
+    def breadthFirstSearch(self, startNode):
         frontier = deque()
         frontier.append(startNode)
         path = {}
-        path[self.vec2int(start)] = None
+        path[self.vec2int(startNode)] = None
         while len(frontier) > 0:
             current = frontier.popleft()
             for next in self.findNeighbors(current):
                 if self.vec2int(next) not in path:
                     frontier.append(next)
-                    path[next] = current - next
+                    path[self.vec2int(next)] = current - next
         print(path)
+        return path
 
 
 
@@ -117,5 +121,5 @@ class Grid: #https://www.youtube.com/watch?v=e3gbNOl4DiM
 start = vec(5,5)
 g = Grid(10,10,start)
 g.findNeighbors(vec(0,0))
-#g.bradthFirstSearch(start)
+g.breadthFirstSearch(start)
 g.run()
