@@ -3,6 +3,7 @@ import time
 from lab2settings import *
 import ast
 from collections import *
+from os import path
 vec = pygame.math.Vector2
 
 
@@ -25,6 +26,15 @@ class Grid: #https://www.youtube.com/watch?v=e3gbNOl4DiM
         self.gridwidth = gridwidth
         self.gridheight = gridheight
 
+        self.path = {}
+        
+        icon_dir = path.join(path.dirname(__file__), '../icons')
+        self.arrows = {}
+        arrow_img = pygame.image.load('rightArrow.png').convert_alpha()
+        arrow_img = pygame.transform.scale(arrow_img, (50, 50))
+        for dir in [(1, 0), (0, 1), (-1, 0), (0, -1)]:
+            self.arrows[dir] = pygame.transform.rotate(arrow_img, vec(dir).angle_to(vec(1, 0)))
+
     def inBounds(self, node):
         return 0 <= node.x < self.gridwidth and 0 <= node.y < self.gridheight
 
@@ -33,12 +43,9 @@ class Grid: #https://www.youtube.com/watch?v=e3gbNOl4DiM
 
     def findNeighbors(self, node): #denna är fel atm
         neighbors = []
-        for direction in self.directions:
-            neighbors.append(node + direction)
-        for neighbor in neighbors:
-            if self.passable(neighbor) and self.inBounds(neighbor):
-                neighbors.remove(neighbor)
-        print(neighbors)
+        neighbors = [node + direction for direction in self.directions]
+        neighbors = filter(self.inBounds, neighbors)
+        neighbors = filter(self.passable, neighbors)
         return neighbors
 
     def draw(self):
@@ -62,14 +69,14 @@ class Grid: #https://www.youtube.com/watch?v=e3gbNOl4DiM
             for wall in wallPairs:
                 self.walls.append(vec(wall[0], wall[1]))
         f.close()
-
-    def vec2int(self, vect):
+    @staticmethod
+    def vec2int(vect):
         return (int(vect.x), int(vect.y))
 
     def breadthFirstSearch(self, startNode):
         frontier = deque()
         frontier.append(startNode)
-        path = {}
+        self.path = {}
         path[self.vec2int(startNode)] = None
         while len(frontier) > 0:
             current = frontier.popleft()
@@ -79,7 +86,6 @@ class Grid: #https://www.youtube.com/watch?v=e3gbNOl4DiM
                     path[self.vec2int(next)] = current - next
         print(path)
         return path
-
 
 
     def run(self):
@@ -93,7 +99,7 @@ class Grid: #https://www.youtube.com/watch?v=e3gbNOl4DiM
                     if event.key == pygame.K_ESCAPE:
                         self.running = False
                     if event.key == pygame.K_s: #save map
-                        f = open("drawnmap.txt","w")
+                        f = open("drawnmap.txt", "w")
                         wallList = []
                         for wall in self.walls:
                             wallList.append([wall.x, wall.y])
@@ -110,16 +116,28 @@ class Grid: #https://www.youtube.com/watch?v=e3gbNOl4DiM
                             g.walls.remove(mousePos)
                         else:
                             g.walls.append(mousePos)
+                    if event.button == 3:
+                        start = mousePos
+                        self.path = self.breadthFirstSearch(start)
             pygame.display.set_caption("{:.2f}".format(g.clock.get_fps()))
             g.screen.fill(darkgray)
             g.drawGrid()
             g.draw()
-            pygame.display.flip()
 
+            for node, dir in self.path.items():
+                if dir:
+                    x, y = node
+                    x = x * tilesize + tilesize/2
+                    y = y * tilesize + tilesize/2
+                    img = self.arrows[Grid.vec2int(dir)]
+                    r = img.get_rect(center=(x, y))
+                    g.screen.blit(img, r)
+
+            pygame.display.flip()
 
 
 start = vec(5,5)
 g = Grid(10,10,start)
 g.findNeighbors(vec(0,0))
-g.breadthFirstSearch(start)
+g.loadDrawn()
 g.run()
