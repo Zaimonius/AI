@@ -9,7 +9,7 @@ vec = pygame.math.Vector2
 
 
 class Grid: #https://www.youtube.com/watch?v=e3gbNOl4DiM
-    def __init__(self, gridwidth, gridheight, agentpos = None, goal = None):
+    def __init__(self, gridwidth, gridheight, start = None, goal = None):
         pygame.init()
         self.screen = pygame.display.set_mode((gridwidth * tilesize, gridheight * tilesize))
         self.clock = pygame.time.Clock()
@@ -22,13 +22,13 @@ class Grid: #https://www.youtube.com/watch?v=e3gbNOl4DiM
         # the directions that the agent can move in
         self.directions = [vec(1, 0), vec(0, 1), vec(-1, 0), vec(0, -1)]
         self.running = False
-        self.start = agentpos
         self.goal = goal
+        self.start = start
         self.gridwidth = gridwidth
         self.gridheight = gridheight
 
+        self.search = {}
         self.path = {}
-        
         self.arrows = {}
         arrow_img = pygame.image.load('rightArrow.png').convert_alpha()
         arrow_img = pygame.transform.scale(arrow_img, (50, 50))
@@ -53,11 +53,11 @@ class Grid: #https://www.youtube.com/watch?v=e3gbNOl4DiM
         for wall in self.walls:
             rect = pygame.Rect(wall * tilesize, (tilesize, tilesize))
             pygame.draw.rect(self.screen, lightgray, rect)
-        if self.start != None:
-            startRect = pygame.Rect(self.start * tilesize, (tilesize, tilesize))
+        if self.goal!= None:
+            startRect = pygame.Rect(self.goal* tilesize, (tilesize, tilesize))
             pygame.draw.rect(self.screen, red, startRect)
-        if self.goal != None:
-            goalRect = pygame.Rect(self.goal * tilesize, (tilesize, tilesize))
+        if self.start != None:
+            goalRect = pygame.Rect(self.start * tilesize, (tilesize, tilesize))
             pygame.draw.rect(self.screen, magenta, goalRect)
 
     def drawGrid(self):
@@ -80,19 +80,25 @@ class Grid: #https://www.youtube.com/watch?v=e3gbNOl4DiM
         return (int(vect.x), int(vect.y))
 
     def breadthFirstSearch(self, startNode):
+        #the search
         frontier = deque()
         frontier.append(startNode)
-        self.path = {}
+        self.search = {}
         while len(frontier) > 0:
             current = frontier.popleft()
-            if current == self.goal:
+            if current == self.start:
                 break
             for nextNode in self.findNeighbors(current):
-                if self.vec2int(nextNode) not in self.path:
+                if self.vec2int(nextNode) not in self.search:
                     frontier.append(self.vec2int(nextNode))
-                    self.path[self.vec2int(nextNode)] = current - nextNode
-        print(path)
-        return self.path
+                    self.search[self.vec2int(nextNode)] = current - nextNode
+        #creation of path
+        if len(self.search) != 0 and self.goal != None:
+            current = self.start#the current node
+            while current != self.goal:
+                current = current + self.search[self.vec2int(current)]
+                #find the next direction in path
+                self.path[self.vec2int(self.search[self.vec2int(current)])] = current
 
     def handleEvents(self):
         for event in pygame.event.get():
@@ -113,11 +119,8 @@ class Grid: #https://www.youtube.com/watch?v=e3gbNOl4DiM
                         self.loadDrawn()
                         print("map loaded")
                     if event.key == pygame.K_e:
-                        print("BFS!")
-                        self.path = self.breadthFirstSearch(self.start)
-                    if event.key == pygame.K_r:
                         print("draw path!")
-                        #self.path = self.depthFirstSearch(self.start)
+                        self.breadthFirstSearch(self.goal)
                 if event.type == pygame.MOUSEBUTTONDOWN:
                     mousePos = vec(pygame.mouse.get_pos()) // tilesize
                     if event.button == 1:
@@ -126,32 +129,30 @@ class Grid: #https://www.youtube.com/watch?v=e3gbNOl4DiM
                         else:
                             g.walls.append(mousePos)
                     if event.button == 2:
-                        self.goal = mousePos
-                    if event.button == 3:
                         self.start = mousePos
+                    if event.button == 3:
+                        self.goal = mousePos
 
     def drawSearch(self):
-        for node, dire in self.path.items():
+        for node, dire in self.search.items():
                 if dire:
                     x, y = node
                     x = x * tilesize + tilesize/2
                     y = y * tilesize + tilesize/2
-                    img = self.arrows[Grid.vec2int(dire)]
+                    img = self.arrows[self.vec2int(dire)]
                     r = img.get_rect(center=(x, y))
                     g.screen.blit(img, r)
 
     def drawPath(self): # draws the path from start to goal
-        if len(self.path) != 0 and self.start != None:
-            current = self.start #the current node
-            while current != self.goal:
-                #stuff for drawing the arrows
-                x = current.x * tilesize + tilesize / 2
-                y = current.y * tilesize + tilesize / 2
-                img = self.arrows[self.vec2int(self.path[(current.x, current.y)])]
-                r = img.get_rect(center=(x, y))
-                g.screen.blit(img, r)
-                #find the next arrow in path
-                current = current + self.path[self.vec2int(current)]
+        for dire, node in self.path.items(): #TODO this or path setting needs fixing...!!
+                if dire:
+                    x, y = node
+                    x = x * tilesize + tilesize/2
+                    y = y * tilesize + tilesize/2
+                    img = self.arrows[dire]
+                    r = img.get_rect(center=(x, y))
+                    g.screen.blit(img, r)
+
 
     def run(self):
         self.running = True
@@ -163,6 +164,7 @@ class Grid: #https://www.youtube.com/watch?v=e3gbNOl4DiM
             self.drawGrid()
             self.draw()
             self.drawPath()
+            #self.drawSearch()
             pygame.display.flip()
 
 
