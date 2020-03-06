@@ -1,11 +1,27 @@
 import pygame
+import pygame.locals
 import time
+import math
 from lab2settings import *
 import ast
 from collections import *
 from os import path
+import heapq
 vec = pygame.math.Vector2
 
+
+class PriorityQueue:
+    def __init__(self):
+        self.nodes = []
+
+    def put(self, node, cost):
+        heapq.heappush(self.nodes, (cost, node))
+
+    def get(self):
+        return heapq.heappop(self.nodes)[1]
+
+    def empty(self):
+        return len(self.nodes) == 0
 
 
 class Grid: #https://www.youtube.com/watch?v=e3gbNOl4DiM
@@ -21,32 +37,45 @@ class Grid: #https://www.youtube.com/watch?v=e3gbNOl4DiM
         self.walls = []
         # the directions that the agent can move in
         self.directions = [vec(1, 0), vec(0, 1), vec(-1, 0), vec(0, -1)]
+        self.diagonals = [vec(1, 1), vec(-1, 1), vec(-1, -1), vec(1, -1)]
         self.running = False
         self.goal = goal
         self.start = start
         self.gridwidth = gridwidth
         self.gridheight = gridheight
-
         self.search = {}
         self.path = {}
         self.arrows = {}
+        self.costSoFar = {}
+        self.weights = {}
         arrow_img = pygame.image.load('rightArrow.png').convert_alpha()
         arrow_img = pygame.transform.scale(arrow_img, (50, 50))
-        for dir in [(1, 0), (-1, 0), (0, 1), (0, -1)]:
-            self.arrows[dir] = pygame.transform.rotate(arrow_img, vec(dir).angle_to(vec(1, 0)))
+        for dire in [(1, 0), (-1, 0), (0, 1), (0, -1), (1, 1), (-1, 1), (-1, -1), (1, -1)]:
+            self.arrows[dire] = pygame.transform.rotate(arrow_img, vec(dire).angle_to(vec(1, 0)))
 
     def inBounds(self, node):
         return 0 <= node.x < self.gridwidth and 0 <= node.y < self.gridheight
 
     def passable(self, node):
         return node not in self.walls
+    
+    def passableDiagonal(self, node, diagonal):
+        if node + vec(diagonal.x, 0) in self.walls or node + vec(0, diagonal.y) in self.walls:
+            return False
+        else:
+            return True
 
-    def findNeighbors(self, node):
-        neighbors = []
-        neighbors = [node + direction for direction in self.directions]
-        neighbors = filter(self.inBounds, neighbors)
-        neighbors = filter(self.passable, neighbors)
-        neighbors = list(neighbors)
+    def findNeighbours(self, node):
+        neighbours = []
+        neighbours = [node + direction for direction in self.directions]
+        diagonalNeighbours = []
+        for diagonal in self.diagonals:
+            if self.passableDiagonal(node, diagonal):
+                diagonalNeighbours.append(node + diagonal)
+        neighbours = neighbours + diagonalNeighbours
+        neighbours = filter(self.inBounds, neighbours)
+        neighbours = filter(self.passable, neighbours)
+        neighbors = list(neighbours)
         return neighbors
 
     def draw(self):
@@ -84,74 +113,171 @@ class Grid: #https://www.youtube.com/watch?v=e3gbNOl4DiM
         frontier = deque()
         frontier.append(startNode)
         self.search = {}
+        self.path = {}
         while len(frontier) > 0:
             current = frontier.popleft()
-            if current == self.start:
+            if current == self.goal:
                 break
-            for nextNode in self.findNeighbors(current):
+            for nextNode in self.findNeighbours(current):
                 if self.vec2int(nextNode) not in self.search:
                     frontier.append(self.vec2int(nextNode))
                     self.search[self.vec2int(nextNode)] = current - nextNode
         #creation of path
-        if len(self.search) != 0 and self.goal != None:
-            current = self.start#the current node
-            while current != self.goal:
+        if len(self.search) != 0 and self.goal is not None:
+            current = self.goal #the current node
+            while current != self.start:
                 current = current + self.search[self.vec2int(current)]
                 #find the next direction in path
-                self.path[self.vec2int(self.search[self.vec2int(current)])] = current
+                self.path[self.vec2int(current)] = self.search[self.vec2int(current)]
+    
+    def cost(self, current, nextNode):
+        if current - nextNode in self.diagonals:
+            return int(self.weights.get(self.vec2int(nextNode), 0) + 14)
+        else:
+            return int(self.weights.get(self.vec2int(nextNode), 0) + 10)
+
+
+
+    def dijkstraSearch(self, startNode): #  same as breadth first but with weights
+        frontier = deque()
+        frontier.append(startNode)
+        self.search = {}
+        self.path = {}
+        self.costSoFar = {}
+        self.costSoFar[self.vec2int(startNode)] = 0
+        while len(frontier) > 0:
+            current = frontier.popleft()
+            if current == self.goal:
+                break
+            for nextNode in self.findNeighbours(current):
+                newCost = self.costSoFar[self.vec2int(current)] + self.cost(current, nextNode)
+                if self.vec2int(nextNode) not in self.costSoFar or newCost < self.costSoFar[self.vec2int(nextNode)]:
+                    self.costSoFar[self.vec2int(nextNode)] = newCost
+                    priority = newCost
+                    frontier.insert(priority, nextNode)
+                    self.search[self.vec2int(nextNode)] = current - nextNode
+        #creation of path
+        if len(self.search) != 0 and self.goal is not None:
+            current = self.goal #the current node
+            while current != self.start:
+                #find the next direction in path
+                self.path[self.vec2int(current)] = self.search[self.vec2int(current)]
+                current = current + self.search[self.vec2int(current)]
+
+    def heuristic(self, node1, node2):
+        #manhattan
+        return int(abs(node1.x - node2.x) + abs(node1.y - node2.y)) # times ten for weight scale
+
+    def aStarSearch(self, startNode):
+        frontier = deque()
+        frontier.append(startNode)
+        self.search = {}
+        self.path = {}
+        self.costSoFar = {}
+        self.costSoFar[self.vec2int(startNode)] = 0
+        while len(frontier) > 0:
+            current = frontier.popleft()
+            if current == self.goal:
+                break
+            for nextNode in self.findNeighbours(current):
+                newCost = self.costSoFar[self.vec2int(current)] + self.cost(current, nextNode)
+                if self.vec2int(nextNode) not in self.costSoFar or newCost < self.costSoFar[self.vec2int(nextNode)]:
+                    self.costSoFar[self.vec2int(nextNode)] = newCost #TODO costs are wrong i think!
+                    priority = self.heuristic(self.goal, nextNode)
+                    frontier.insert(priority, nextNode)
+                    self.search[self.vec2int(nextNode)] = current - nextNode
+        #creation of path
+        if len(self.search) != 0 and self.goal is not None:
+            current = self.goal #the current node
+            while current != self.start:
+                #find the next direction in path
+                self.path[self.vec2int(current)] = self.search[self.vec2int(current)]
+                current = current + self.search[self.vec2int(current)]
+
+
+    def depthFirstSearch(self, startNode): #this is not a good depth first
+        #the search
+        visited, stack = set(), [startNode]
+        self.search = {}
+        self.path = {}
+        while len(stack) > 0:
+            current = stack.pop()
+            if current == self.goal:
+                break
+            for nextNode in self.findNeighbours(current):
+                if self.vec2int(nextNode) not in self.search:
+                    stack.append(self.vec2int(nextNode))
+                    self.search[self.vec2int(nextNode)] = current - nextNode
+        #creation of path
+        if len(self.search) != 0 and self.goal is not None:
+            current = self.goal #the current node
+            while current != self.start:
+                current = current + self.search[self.vec2int(current)]
+                #find the next direction in path
+                self.path[self.vec2int(current)] = self.search[self.vec2int(current)]
 
     def handleEvents(self):
         for event in pygame.event.get():
-                if event.type == pygame.QUIT:
+            if event.type == pygame.QUIT:
+                self.running = False
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_ESCAPE:
                     self.running = False
-                if event.type == pygame.KEYDOWN:
-                    if event.key == pygame.K_ESCAPE:
-                        self.running = False
-                    if event.key == pygame.K_q: #save map
-                        f = open("drawnmap.txt", "w")
-                        wallList = []
-                        for wall in self.walls:
-                            wallList.append([wall.x, wall.y])
-                        f.write(str(wallList))
-                        f.close()
-                        print("map saved")
-                    if event.key == pygame.K_w:
-                        self.loadDrawn()
-                        print("map loaded")
-                    if event.key == pygame.K_e:
-                        print("draw path!")
-                        self.breadthFirstSearch(self.goal)
-                if event.type == pygame.MOUSEBUTTONDOWN:
-                    mousePos = vec(pygame.mouse.get_pos()) // tilesize
-                    if event.button == 1:
-                        if mousePos in self.walls:
-                            g.walls.remove(mousePos)
-                        else:
-                            g.walls.append(mousePos)
-                    if event.button == 2:
-                        self.start = mousePos
-                    if event.button == 3:
-                        self.goal = mousePos
+                if event.key == pygame.K_q: #save map
+                    f = open("drawnmap.txt", "w")
+                    wallList = []
+                    for wall in self.walls:
+                        wallList.append([wall.x, wall.y])
+                    f.write(str(wallList))
+                    f.close()
+                    print("map saved")
+                if event.key == pygame.K_w:
+                    self.loadDrawn()
+                    print("map loaded")
+                if event.key == pygame.K_e:
+                    print("breadth first!")
+                    self.breadthFirstSearch(self.start)
+                if event.key == pygame.K_r:
+                    print("diJkstras!")
+                    self.dijkstraSearch(self.start)
+                if event.key == pygame.K_t:
+                    print("ASTAR!")
+                    self.aStarSearch(self.start)
+            if event.type == pygame.MOUSEBUTTONDOWN:
+                mousePos = vec(pygame.mouse.get_pos()) // tilesize
+                if event.button == 1:
+                    if mousePos in self.walls:
+                        g.walls.remove(mousePos)
+                    else:
+                        g.walls.append(mousePos)
+                if event.button == 2:
+                    self.start = mousePos
+                if event.button == 3:
+                    self.goal = mousePos
 
     def drawSearch(self):
         for node, dire in self.search.items():
-                if dire:
-                    x, y = node
-                    x = x * tilesize + tilesize/2
-                    y = y * tilesize + tilesize/2
-                    img = self.arrows[self.vec2int(dire)]
-                    r = img.get_rect(center=(x, y))
-                    g.screen.blit(img, r)
+            if dire:
+                x, y = node
+                x = x * tilesize + tilesize/2 #4
+                y = y * tilesize + tilesize/2 #4
+                img = self.arrows[self.vec2int(dire)]
+                r = img.get_rect(center=(x, y))
+                g.screen.blit(img, r)
+                #r = pygame.Rect(x, y, tilesize/2, tilesize/2)
+                #surface = pygame.Surface((tilesize/2, tilesize/2))
+                #surface.fill(yellow)
+                #g.screen.blit(surface, r)
 
     def drawPath(self): # draws the path from start to goal
-        for dire, node in self.path.items(): #TODO this or path setting needs fixing...!!
-                if dire:
-                    x, y = node
-                    x = x * tilesize + tilesize/2
-                    y = y * tilesize + tilesize/2
-                    img = self.arrows[dire]
-                    r = img.get_rect(center=(x, y))
-                    g.screen.blit(img, r)
+        for node, dire in self.path.items():
+            if dire:
+                x, y = node
+                x = x * tilesize + tilesize/2
+                y = y * tilesize + tilesize/2
+                img = self.arrows[self.vec2int(dire)]
+                r = img.get_rect(center=(x, y))
+                g.screen.blit(img, r)
 
 
     def run(self):
@@ -162,12 +288,12 @@ class Grid: #https://www.youtube.com/watch?v=e3gbNOl4DiM
             pygame.display.set_caption("{:.2f}".format(self.clock.get_fps()))
             self.screen.fill(darkgray)
             self.drawGrid()
+            self.drawSearch()
             self.draw()
-            self.drawPath()
-            #self.drawSearch()
+            #self.drawPath()
             pygame.display.flip()
 
 
 
-g = Grid(10,10)
+g = Grid(20, 20)
 g.run()
