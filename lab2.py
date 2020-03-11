@@ -17,10 +17,10 @@ import torch.nn.functional as F
 from torch.utils.data import Dataset
 import torch.optim as optim
 import random
+import math
 vec = pygame.math.Vector2
 
-
-class Grid: #https://www.youtube.com/watch?v=e3gbNOl4DiM
+class Grid: #https:#www.youtube.com/watch?v=e3gbNOl4DiM
     def __init__(self, gridwidth, gridheight, start = None, goal = None):
         pygame.init()
         self.screen = pygame.display.set_mode((gridwidth * tilesize, gridheight * tilesize))
@@ -234,6 +234,18 @@ class PriorityQueue:
     def empty(self):
         return len(self.nodes) == 0
 
+class Node():
+    def __init__(self, parent=None, position=None):
+        self.parent = parent
+        self.position = position
+
+        self.g = 0
+        self.h = 0
+        self.f = 0
+
+    def __eq__(self, other):
+        return self.position == other.position
+
 class WeightedGrid(Grid):
     def __init__(self, width, height):
         super().__init__(width, height)
@@ -267,7 +279,7 @@ class WeightedGrid(Grid):
                     print("ASTAR!")
                     self.aStarSearch(self.start)
             if event.type == pygame.MOUSEBUTTONDOWN:
-                mousePos = vec(pygame.mouse.get_pos()) // tilesize
+                mousePos = vec(pygame.mouse.getPos()) # tilesize
                 if event.button == 1:
                     if mousePos in self.walls:
                         g.walls.remove(mousePos)
@@ -293,17 +305,18 @@ class WeightedGrid(Grid):
 
     def cost(self, current, nextNode):
         if current - nextNode in self.diagonals:
-            return int(self.weights.get(self.vec2int(nextNode), 0) + 14)
+            return 14
         elif current - nextNode != 0:
-            return int(self.weights.get(self.vec2int(nextNode), 0) + 10)
+            return 10
         else:
             return 0
 
     def pathCost(self):
         prevNode = self.goal
+        cost = 0
         for node, dire in self.path.items():
             if dire:
-                cost = cost + cost(prevNode, node)
+                cost = cost + self.cost(prevNode, node)
         return cost
 
     def randomAStar(self):
@@ -313,10 +326,17 @@ class WeightedGrid(Grid):
         self.goal = vec(goal[0], goal[1])
         self.aStarSearch(self.start)
         dist = self.pathCost()
-
+        theMap = self.mapToList()
+        return theMap, dist
 
     def randomList(self, amount):
-        pass
+        x = []
+        y = []
+        for i in range(amount):
+            a, b = self.randomAStar()
+            x = x + [a]
+            y = y + [b]
+        return (x, y)
 
     def dijkstraSearch(self, startNode): #  same as breadth first but with weights
         frontier = PriorityQueue()
@@ -344,48 +364,151 @@ class WeightedGrid(Grid):
                 self.path[self.vec2int(current)] = self.search[self.vec2int(current)]
                 current = current + self.search[self.vec2int(current)]
 
-    def heuristic(self, node1, node2):
-        #manhattan
-        return int(abs(node1.x - node2.x) + abs(node1.y - node2.y)) # times ten for weight scale
+    def heuristic(self, node1, node2=None):
+        if node2 == None:
+            node2 = self.goal
+        #diagonal manhattan distance
+        dx = abs(node1.x - node2.x)
+        dy = abs(node1.y - node2.y)
+        D = 1
+        D2 = math.sqrt(2)
+        return int(D * (dx + dy) + (D2 - 2 * D) * min(dx, dy))
+
+    def reconstructPath(self, cameFrom, current):
+        totalPath = [current]
+        while self.vec2int(current) in cameFrom.keys():
+            current = cameFrom[self.vec2int(current)]
+            totalPath.insert(0, current)
+        self.path = totalPath
+        return totalPath
 
     def aStarSearch(self, startNode):
-        frontier = deque()
-        frontier.append(startNode)
-        self.search = {}
-        self.path = {}
-        self.costSoFar = {}
-        self.costSoFar[self.vec2int(startNode)] = 0
-        while len(frontier) > 0:
-            current = frontier.popleft()
-            if current == self.goal:
-                break
-            for nextNode in self.findNeighbours(current):
-                newCost = self.costSoFar[self.vec2int(current)] + self.cost(current, nextNode)
-                if self.vec2int(nextNode) not in self.costSoFar or newCost < self.costSoFar[self.vec2int(nextNode)]:
-                    self.costSoFar[self.vec2int(nextNode)] = newCost #TODO costs are wrong i think!
-                    priority = self.heuristic(self.goal, nextNode)
-                    frontier.insert(priority, nextNode)
-                    self.search[self.vec2int(nextNode)] = current - nextNode
-        #creation of path
-        if len(self.search) != 0 and self.goal is not None:
-            current = self.goal #the current node
-            while current != self.start:
-                #find the next direction in path
-                self.path[self.vec2int(current)] = self.search[self.vec2int(current)]
-                current = current + self.search[self.vec2int(current)]
+        #discovered nodes
+        openList = deque()
+        openList.append(startNode)
+        closedList = []
+        #for node n cameFrom[n] is the node immediately preceding it on the cheapest path from start to n currently known
+        cameFrom =  {}
+        # For node n, gScore[n] is the cost of the cheapest path from start to n currently known
+        gScore = {}
+        gScore[self.vec2int(startNode)] = 0
 
+        # For node n, fScore[n] = gScore[n] + h(n). fScore[n] represents our current best guess as to
+        # how short a path from start to finish can be if it goes through n
+        fScore = {}
+        fScore[self.vec2int(startNode)] = self.heuristic(startNode)
+        while len(openList):
+            current = openList.popleft() # the node in open list having the lowest fScore value
+            closedList.append(current)
+            if current == self.goal:
+                return self.reconstructPath(cameFrom, current)
+            for neighbor in self.findNeighbours(current):
+                # d(current,neighbor) is the weight of the edge from current to neighbor
+                # tentative_gScore is the distance from start to the neighbor through current
+                tentativeGScore = gScore[self.vec2int(current)] + self.cost(current, neighbor)
+                if tentativeGScore < gScore[self.vec2int(neighbor)]:
+                    # This path to neighbor is better than any previous one. Record it!
+                    cameFrom[self.vec2int(neighbor)] = current
+                    gScore[self.vec2int(neighbor)] = tentativeGScore
+                    fScore[self.vec2int(neighbor)] = gScore[self.vec2int(neighbor)] + self.heuristic(neighbor)
+                    if neighbor not in closedList:
+                        self.search[self.vec2int(current)] = current - neighbor
+                        openList.append(neighbor)
+        print("done")
+        return
+
+    def AStar(self, startNode):    
+    # Create start and end node
+    opa = self.vec2int(self.start)
+    end = self.vec2int(self.goal)
+    startNode = Node(None, start1)
+    startNode.g = startNode.h = startNode.f = 0
+    endNode = Node(None, end1)
+    endNode.g = endNode.h = endNode.f = 0
+    
+    # Initialize both open and closed list
+    openList = []
+    closedList = []
+
+    # Add the start node
+    openList.append(startNode)
+
+    # Loop until you find the end
+    while len(openList) > 0:
+
+        # Get the current node
+        currentNode = openList[0]
+        currentIndex = 0
+        for index, item in enumerate(openList):
+            if item.f < currentNode.f:
+                currentNode = item
+                currentIndex = index
+
+        # Pop current off open list, add to closed list
+        openList.pop(currentIndex)
+        closedList.append(currentNode)
+
+        # Found the goal
+        if currentNode == endNode:
+            path = []
+            current = currentNode
+            while current is not None:
+                path.append(current.position)
+                current = current.parent
+            return path[::-1] # Return reversed path
+
+        # Generate children
+        children = []
+        for newPosition in [(0, -1), (0, 1), (-1, 0), (1, 0), (-1, -1), (-1, 1), (1, -1), (1, 1)]: # Adjacent squares
+
+            # Get node position
+            nodePosition = (currentNode.position[0] + newPosition[0], currentNode.position[1] + newPosition[1])
+
+            # Make sure within range
+            if nodePosition[0] > (len(maze) - 1) or nodePosition[0] < 0 or nodePosition[1] > (len(maze[len(maze)-1]) -1) or nodePosition[1] < 0:
+                continue
+
+            # Make sure walkable terrain
+            if maze[nodePosition[0]][nodePosition[1]] != 0:
+                continue
+
+            # Create new node
+            newNode = Node(currentNode, nodePosition)
+
+            # Append
+            children.append(newNode)
+
+        # Loop through children
+        for child in children:
+
+            # Child is on the closed list
+            for closedChild in closedList:
+                if child == closedChild:
+                    continue
+
+            # Create the f, g, and h values
+            child.g = currentNode.g + 1
+            child.h = ((child.position[0] - endNode.position[0]) ** 2) + ((child.position[1] - endNode.position[1]) ** 2)
+            child.f = child.g + child.h
+
+            # Child is already in the open list
+            for openNode in openList:
+                if child == openNode and child.g > openNode.g:
+                    continue
+
+            # Add the child to the open list
+            openList.append(child)
 
 class CustomDataSet(Dataset):
-    def __init__(self,dataPoints):
-        pass
-        X, y = self.RMList(dataPoints)          
-        #Store them in member variables.
+    def __init__(self, dataPoints):
+        self.g = WeightedGrid(dataPoints, dataPoints)
+        X, y = self.g.randomList(dataPoints)
         self.X = X
         self.y = y
 
 class Net(nn.Module):
     def __init__(self, inputSize):
-        super.__init__()
+        super().__init__()
         self.fc1 = nn.Linear(inputSize, 64)
         self.fc2 = nn.Linear(64, 64)
         self.fc3 = nn.Linear(64, 64)
@@ -398,16 +521,68 @@ class Net(nn.Module):
         x = self.fc4(x)
         return F.log_softmax(x, dim=1)
 
+    def __len__(self):
+        return len(self.y)
+   
+    def __getitem__(self, index):
+        return torch.FloatTensor(self.X[index]),self.y[index]
 
+#trainDataset = CustomDataSet(28)
 
-
-#trainDataset = CustomDataSet(20)
-
-
-
-
+#textPp = "B==========D"
 g = WeightedGrid(20, 20)
-g.loadMap("Map3.txt")
+g.loadMap("Map1.txt")
 g.run()
 
+#net = Net(28)
+
+#Create train and test data
+#train = CustomDataSet(20)
+#test = CustomDataSet(20)
+#make them sets
+#trainset = torch.utils.data.DataLoader(train, batch_size=100, shuffle=True)
+#testset = torch.utils.data.DataLoader(test, batch_size=10, shuffle=False)
+
+#decide loss function and optmizer
+#loss_function = nn.CrossEntropyLoss()
+#optimizer = optim.Adam(net.parameters(), lr=0.001)
+
+#Teach the NN
+#for datasets in range(200): #10000
+#    print("Epoch #", datasets)
+#    train = CustomDataset(200)
+#    trainset = torch.utils.data.DataLoader(train, batch_size=100, shuffle=True)
+#    for epoch in range(10): # 3 full passes over the data
+#        for data in trainset:  # `data` is a batch of data
+#            X, y = data  # X is the batch of features, y is the batch of targets.
+#            net.zero_grad()  # sets gradients to 0 before loss calc. You will do this likely every step.
+#            output = net(X.view(-1,784))  # pass in the reshaped batch (recall they are 28x28 atm)
+#            loss = F.nll_loss(output, y)  # calc and grab the loss value
+#            loss.backward()  # apply this loss backwards thru the network's parameters
+#            optimizer.step()  # attempt to optimize weights to account for loss/gradients
+
+
+# Test the NN
+#net.eval() # needed?
+#correct = 0
+#total = 0
+#with torch.no_grad():
+#    for data in testset:
+#        X, y = data
+#        output = net(X.view(-1,784))
+#        #print(output)
+#        for idx, i in enumerate(output):
+#            print(torch.argmax(i), y[idx])
+#            if torch.argmax(i) == y[idx]:
+#                correct += 1
+#            total += 1
+
+#print("Accuracy: ", round((correct/total)*100, 3))
+
+## Save and load a model parameters:
+##torch.save(net.state_dict(), PATH)
+##
+##net = Net()   #TheModelClass(*args, **kwargs)
+##net.load_state_dict(torch.load(PATH))
+##net.eval()
 
