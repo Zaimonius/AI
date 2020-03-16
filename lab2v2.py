@@ -22,10 +22,12 @@ vec = pygame.math.Vector2
 
 
 class Grid: #https:#www.youtube.com/watch?v=e3gbNOl4DiM
-    def __init__(self, gridwidth, gridheight, start = None, goal = None):
+    def __init__(self, gridwidth, gridheight, start = None, goal = None, window=False):
         pygame.init()
         #screen
-        self.screen = pygame.display.set_mode((gridwidth * tilesize, gridheight * tilesize))
+        self.window = window
+        if window == True:
+            self.screen = pygame.display.set_mode((gridwidth * tilesize, gridheight * tilesize))
         #clock
         self.clock = pygame.time.Clock()
         #pixel grid measuements
@@ -49,90 +51,120 @@ class Grid: #https:#www.youtube.com/watch?v=e3gbNOl4DiM
         self.search = []
         self.path = []
 
-    def draw(self):
+    def Draw(self):
         #draws all the walls, the goal and the start
-        for wall in self.walls:
-            rect = pygame.Rect(wall * tilesize, (tilesize, tilesize))
-            pygame.draw.rect(self.screen, lightgray, rect)
-        if self.goal!= None:
-            startRect = pygame.Rect(vec(self.goal[0], self.goal[1])* tilesize, (tilesize, tilesize))
-            pygame.draw.rect(self.screen, red, startRect)
-        if self.start != None:
-            goalRect = pygame.Rect(vec(self.start[0], self.start[1]) * tilesize, (tilesize, tilesize))
-            pygame.draw.rect(self.screen, magenta, goalRect)
+        if self.window == True:
+            for wall in self.walls:
+                rect = pygame.Rect(vec(wall[0], wall[1])* tilesize, (tilesize, tilesize))
+                pygame.draw.rect(self.screen, lightgray, rect)
+            if self.goal!= None:
+                startRect = pygame.Rect(vec(self.goal[0], self.goal[1])* tilesize, (tilesize, tilesize))
+                pygame.draw.rect(self.screen, red, startRect)
+            if self.start != None:
+                goalRect = pygame.Rect(vec(self.start[0], self.start[1]) * tilesize, (tilesize, tilesize))
+                pygame.draw.rect(self.screen, magenta, goalRect)
 
-    def drawGrid(self):
-        #Draws the grid and the background
-        for x in range(0, self.width, tilesize):
-            pygame.draw.line(self.screen, lightgray, (x, 0), (x, self.height))
-        for y in range(0, self.width, tilesize):
-            pygame.draw.line(self.screen, lightgray, (0, y), (self.width, y))
+    def DrawGrid(self):
+        if self.window == True: 
+            #Draws the grid and the background
+            for x in range(0, self.width, tilesize):
+                pygame.draw.line(self.screen, lightgray, (x, 0), (x, self.height))
+            for y in range(0, self.width, tilesize):
+                pygame.draw.line(self.screen, lightgray, (0, y), (self.width, y))
 
-    def drawSearch(self):
-        for node in self.search:
-            x, y = node.posistion
-            x = x * tilesize + tilesize/2 #4
-            y = y * tilesize + tilesize/2 #4
-            r = pygame.Rect(x, y, tilesize/2, tilesize/2)
-            surface = pygame.Surface((tilesize/2, tilesize/2))
-            surface.fill(yellow)
-            g.screen.blit(surface, r)
+    def DrawSearch(self):
+        if self.window == True:
+            for node in self.search:
+                x, y = node
+                rect = pygame.Rect(vec(x, y)* tilesize, (tilesize, tilesize))
+                pygame.draw.rect(self.screen, yellow, rect)
     
-    def drawPath(self):
-        for position in self.path:
-            x, y = position
-            x = x * tilesize + tilesize/2 #4
-            y = y * tilesize + tilesize/2 #4
-            r = pygame.Rect(x, y, tilesize/2, tilesize/2)
-            surface = pygame.Surface((tilesize/2, tilesize/2))
-            surface.fill(cyan)
-            g.screen.blit(surface, r)
+    def DrawPath(self):
+        if self.window == True:
+            for position in self.path:
+                x, y = position
+                rect = pygame.Rect(vec(x, y)* tilesize, (tilesize, tilesize))
+                pygame.draw.rect(self.screen, cyan, rect)
 
-
-    def randomPoints(self):
+    def RandomPoints(self):
         #picks random tiles for start and goal
         startOK = False
         goalOK = False
         #start
         while not startOK:
-            x1 = random.randint(0, self.gridwidth)
-            y1 = random.randint(0, self.gridheight)
+            x1 = random.randint(0, self.gridwidth-1)
+            y1 = random.randint(0, self.gridheight-1)
             if (x1, y1) not in self.walls:
                 startOK = True
         #goal
         while not goalOK:
-            x2 = random.randint(0, self.gridwidth)
-            y2 = random.randint(0, self.gridheight)
-            if (x2, y2) not in self.walls:
+            x2 = random.randint(0, self.gridwidth-1)
+            y2 = random.randint(0, self.gridheight-1)
+            if (x2, y2) not in self.walls and (x2, y2) is not (x1, y2):
                 goalOK = True
+        
         return (x1, y1), (x2, y2)
 
-    def inBounds(self, node):
+    def InBounds(self, node):
         return 0 <= node[0] < self.gridwidth and 0 <= node[0] < self.gridheight
 
-    def passable(self, node):
+    def Passable(self, node):
         return node not in self.walls
     
-    def passableDiagonal(self, node, diagonal):
+    def PassableDiagonal(self, node, diagonal):
         if (node[0] + diagonal[0], node[1] + 0) in self.walls or (node[0] + 0, node[1] + diagonal[1]) in self.walls:
             return False
         else:
             return True
 
-    def findNeighbours(self, node):
+    def FindNeighbours(self, node):
         neighbours = []
         neighbours = [(node[0] + direction[0], node[1] + direction[1]) for direction in self.directions]
         diagonalNeighbours = []
         for diagonal in self.diagonals:
-            if self.passableDiagonal(node, diagonal):
+            if self.PassableDiagonal(node, diagonal):
                 diagonalNeighbours.append((node[0] + diagonal[0], node[1] + diagonal[1]))
         neighbours = neighbours + diagonalNeighbours
-        neighbours = filter(self.inBounds, neighbours)
-        neighbours = filter(self.passable, neighbours)
+        neighbours = filter(self.InBounds, neighbours)
+        neighbours = filter(self.Passable, neighbours)
         neighbors = list(neighbours)
         return neighbors
 
-    def breadthFirstSearch(self):
+    def HandleEvents(self):
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                self.running = False
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_q:
+                    print("BFS!")
+                    self.BFS()
+            if event.type == pygame.MOUSEBUTTONDOWN:
+                mousePosPix = pygame.mouse.get_pos()
+                mousePos = (int(mousePosPix[0]/tilesize), int(mousePosPix[1]/tilesize))
+                if event.button == 1:
+                    if mousePos in self.walls:
+                        g.walls.remove(mousePos)
+                    else:
+                        g.walls.append(mousePos)
+                if event.button == 2:
+                    self.start = mousePos
+                if event.button == 3:
+                    self.goal = mousePos
+
+    def Run(self):
+        self.running = True
+        while self.running:
+            self.clock.tick(FPS)
+            self.HandleEvents()
+            pygame.display.set_caption("{:.2f}".format(self.clock.get_fps()))
+            self.screen.fill(darkgray)
+            self.DrawGrid()
+            self.DrawSearch()
+            self.DrawPath()
+            self.Draw()
+            pygame.display.flip()
+
+    def BFS(self):
         startNode = Node(None, self.start)
         endNode = Node(None, self.goal)
         #frontier queue
@@ -150,7 +182,7 @@ class Grid: #https:#www.youtube.com/watch?v=e3gbNOl4DiM
                 endNode.parent = current
                 break
             #if not found add all the neighbours of the current node to frontier if they have not been added
-            for nextNodePos in self.findNeighbours(current.position):
+            for nextNodePos in self.FindNeighbours(current.position):
                 if nextNodePos not in self.search:
                     #make the next node
                     nextNode = Node(current, nextNodePos)
@@ -159,7 +191,7 @@ class Grid: #https:#www.youtube.com/watch?v=e3gbNOl4DiM
                     #add the neighbour to the frontier
                     frontier.append(nextNode)
                     #add the current node to the search because it has been discovered
-                    self.search.append(current.position)
+                    self.search.append(nextNode.position)
         #creation of path
         current = endNode
         #while the current tile is not starting tile
@@ -170,52 +202,286 @@ class Grid: #https:#www.youtube.com/watch?v=e3gbNOl4DiM
             current = current.parent
         return self.path
 
+    def loadMap(self, filePath):
+        with open(filePath) as f:
+            lineList = f.readlines()
+            gridwidth = len(lineList[0]) - 1
+            gridheight = len(lineList)
+            self.screen = pygame.display.set_mode((gridwidth * tilesize, gridheight * tilesize))
+            self.width = tilesize * gridwidth
+            self.height = tilesize * gridheight
+            self.gridwidth = gridwidth
+            self.gridheight = gridheight
+            i = 0
+            i2 = 0
+            for line in lineList:
+                for letter in line:
+                    if letter != 0:
+                        if letter == "X":
+                            self.walls.append(vec(i, i2))
+                        elif letter == "S":
+                            self.start = vec(i, i2)
+                        elif letter == "G":
+                            self.goal = vec(i, i2)
+                    i2 = i2 + 1
+                i2 = 0
+                i = i + 1
 
-    def handleEvents(self):
+    def mapList(self, h=None, w=None):
+        if h == None or w == None:
+            h = self.gridheight
+            w = self.gridwidth
+        #only for training neural network
+        listMap = []
+        for i in range(h):
+            listMap = listMap + [[0]*w]
+        listMap[int(self.start[0])][int(self.start[1])] = 2
+        listMap[int(self.goal[0])][int(self.goal[1])] = 2
+        return listMap
+
+class Node:
+    def __init__(self, parent=None, position=None):
+        self.parent = parent
+        self.position = position
+        #g is the cost of the path from the start node to this node
+        self.g = 0
+        #h is the heuristic function cost that estimates the cheapest path from the node to the goal
+        self.h = 0
+        #f are the h and g value combined into one value
+        self.f = 0
+
+    def __eq__(self, other):
+        return self.position == other.position
+
+class WeightedGrid(Grid):
+    def __init__(self, gridwidth=0, gridheight=0, start = None, goal = None, window = False):
+        super().__init__(gridwidth, gridheight, start, goal, window)
+
+    def HandleEvents(self):
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 self.running = False
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_q:
                     print("BFS!")
-                    self.breadthFirstSearch()
+                    self.BFS()
+                if event.key == pygame.K_w:
+                    print("A*")
+                    self.AStar()
+                if event.key == pygame.K_e:
+                    print(self.mapList())
+                if event.key == pygame.K_r:
+                    self.start, self.goal = self.RandomPoints()
             if event.type == pygame.MOUSEBUTTONDOWN:
                 mousePosPix = pygame.mouse.get_pos()
                 mousePos = (int(mousePosPix[0]/tilesize), int(mousePosPix[1]/tilesize))
+                if event.button == 1:
+                    if mousePos in self.walls:
+                        g.walls.remove(mousePos)
+                    else:
+                        g.walls.append(mousePos)
                 if event.button == 2:
                     self.start = mousePos
                 if event.button == 3:
                     self.goal = mousePos
 
-    def run(self):
-        self.running = True
-        while self.running:
-            self.clock.tick(FPS)
-            self.handleEvents()
-            pygame.display.set_caption("{:.2f}".format(self.clock.get_fps()))
-            self.screen.fill(darkgray)
-            self.drawGrid()
-            self.drawSearch()
-            self.draw()
-            #self.drawPath()
-            pygame.display.flip()
+    def Heuristic(self, node1, node2=None):
+        if node2 is None:
+            node2 = self.goal
+        #manhattan + chebyshev
+        dx = abs(node1[0] - node2[0])
+        dy = abs(node1[1] - node2[1])
+        D = 1
+        D2 = 1 #chebyshev   #math.sqrt(2)  #octile
+        return D * (dx + dy) + (D2 - 2 * D) * min(dx, dy)
 
-class Node:
-    def __init__(self, parent=None, position=None):
-        self.parent = parent
-        self.position = position
+    def Cost(self, pos1, pos2):
+        #calculates the cost to move between two positions
+        if pos1[0] - pos2[0] > 1 or pos1[1] - pos2[1] > 1:
+            print("reeee")
+        direction = (pos1[0]-pos2[0], pos1[1], pos2[1])
+        if direction in self.diagonals:
+            return 1.4
+        else:
+            return 1
 
-        self.g = 0
-        self.h = 0
-        self.f = 0
+    def AStar(self):
+        #Create start and end nodes
+        startNode = Node(None, self.start)
+        startNode.g = startNode.h = startNode.f = 0
+        endNode = Node(None, self.goal)
+        endNode.g = endNode.h = endNode.f = 0
 
-    def __eq__(self, other):
-        return self.position == other.position
+        #create open and closed list
+        openList = [startNode]
+        closedList = []
 
-class WeigthedGrid:
-    pass
+        #reset the path and search lists
+        self.path = []
+        self.search = []
 
+        #create the loop
+        while len(openList) > 0:
+            #reset index and node
+            current = openList[0]
+            currentIndex = 0
+            #loop for the next index and node with the least f value
+            for index, item in enumerate(openList):
+                if item.f < current.f:
+                    current = item
+                    currentIndex = index
+            #remove the current from the open list and append it to the closed list
+            openList.pop(currentIndex)
+            closedList.append(current)
 
-g = Grid(20, 20)
-g.run()
+            if current.position == endNode.position:
+                self.path = []
+                while current is not None:
+                    self.path.append(current.position) #prepend?
+                    current = current.parent
+                return
+            
+            #generate neigbours
+            neighbours = []
+            for newPos in self.FindNeighbours(current.position):
+                newNode = Node(current, newPos)
+                neighbours.append(newNode)
+            
+            for neighbour in neighbours:
+                #check if neighbour already in the closed list
+                for closedNeighbour in closedList:
+                    if neighbour.position == closedNeighbour.position:
+                        continue
+                
+                #calculate the cost to get from this node to the neighbour 
+                cost = current.g + self.Cost(current.position, neighbour.position)
+                
+                #if the neighbour is already in the open list, dont add it
+                if neighbour in openList:
+                    if neighbour.g > cost: #if there is already a cost, compare which is best
+                        neighbour.g = cost
+                else:
+                    #else add the neighbour
+                    neighbour.g = cost
+                    openList.append(neighbour)
+                    self.search.append(neighbour.position)
+                #create all the values for h and f
+                neighbour.h = self.Heuristic(neighbour.position, endNode.position)
+                neighbour.f = neighbour.g + neighbour.h
+
+    def PathCost(self):
+        prev = self.start
+        cost = 0
+        for node in self.path:
+            cost = cost + self.Cost(prev, node)
+            prev = node
+        return cost
     
+    def RandomAStar(self, size):
+        self = WeightedGrid(size, size)
+        start, goal = self.RandomPoints() #return (x1, y1), (x2, y2) from random points
+        self.start = start
+        self.goal = goal
+        self.AStar()
+        dist = self.PathCost()
+        theMap = self.mapList()
+        return theMap, dist
+    
+    def RandomAStarList(self, size, gridsize):
+        x = []
+        y = []
+        for i in range(size):
+            a, b = self.RandomAStar(gridsize)
+            x = x + [a]
+            y = y + [b]
+        return x, y
+
+
+
+class CustomDataSet(Dataset):
+    def __init__(self, dataPoints):
+        self.g = WeightedGrid(dataPoints, dataPoints)
+        X, y = self.g.RandomAStarList(dataPoints, dataPoints)
+        self.X = X
+        self.y = y
+    
+    def __len__(self):
+        return len(self.y)
+   
+    def __getitem__(self, index):
+        return torch.FloatTensor(self.X[index]),self.y[index]
+
+class Net(nn.Module):
+    def __init__(self, inputSize):
+        super().__init__()
+        self.fc1 = nn.Linear(inputSize, 64)
+        self.fc2 = nn.Linear(64, 64)
+        self.fc3 = nn.Linear(64, 64)
+        self.fc4 = nn.Linear(64, 100)
+
+    def forward(self, x):
+        x = F.relu(self.fc1(x))
+        x = F.relu(self.fc2(x))
+        x = F.relu(self.fc3(x))
+        x = self.fc4(x)
+        return F.log_softmax(x, dim=1)
+
+#g = WeightedGrid(20, 20)
+#g.loadMap("Map1.txt")
+#g.Run()
+
+
+
+# #textPp = "B==========D"
+# net = Net(20)
+
+# #Create train and test data
+# train = CustomDataSet(20)
+# test = CustomDataSet(20)
+# #make them sets
+# trainset = torch.utils.data.DataLoader(train, batch_size=100, shuffle=True)
+# testset = torch.utils.data.DataLoader(test, batch_size=10, shuffle=False)
+
+# #decide loss function and optmizer
+# loss_function = nn.CrossEntropyLoss()
+# optimizer = optim.Adam(net.parameters(), lr=0.001)
+
+# #Teach the NN
+# for datasets in range(200): #10000
+#     print("Epoch #", datasets)
+#     train = CustomDataSet(200)
+#     trainset = torch.utils.data.DataLoader(train, batch_size=100, shuffle=True)
+#     for epoch in range(10): # 3 full passes over the data
+#         for data in trainset:  # `data` is a batch of data
+#             X, y = data  # X is the batch of features, y is the batch of targets.
+#             net.zero_grad()  # sets gradients to 0 before loss calc. You will do this likely every step.
+#             output = net(X.view(-1,784))  # pass in the reshaped batch (recall they are 28x28 atm)
+#             loss = F.nll_loss(output, y)  # calc and grab the loss value
+#             loss.backward()  # apply this loss backwards thru the network's parameters
+#             optimizer.step()  # attempt to optimize weights to account for loss/gradients
+
+
+# # Test the NN
+# net.eval() # needed?
+# correct = 0
+# total = 0
+# with torch.no_grad():
+#     for data in testset:
+#         X, y = data
+#         output = net(X.view(-1,784))
+#         #print(output)
+#         for idx, i in enumerate(output):
+#             print(torch.argmax(i), y[idx])
+#             if torch.argmax(i) == y[idx]:
+#                 correct += 1
+#             total += 1
+
+# print("Accuracy: ", round((correct/total)*100, 3))
+
+## Save and load a model parameters:
+##torch.save(net.state_dict(), PATH)
+##
+##net = Net()   #TheModelClass(*args, **kwargs)
+##net.load_state_dict(torch.load(PATH))
+##net.eval()
+

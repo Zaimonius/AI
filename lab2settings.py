@@ -1,4 +1,4 @@
-tilesize = 32
+tilesize = 48
 FPS = 60
 white = (255, 255, 255)
 black = (0, 0, 0)

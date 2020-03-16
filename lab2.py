@@ -418,86 +418,86 @@ class WeightedGrid(Grid):
         return
 
     def AStar(self, startNode):    
-    # Create start and end node
-    opa = self.vec2int(self.start)
-    end = self.vec2int(self.goal)
-    startNode = Node(None, start1)
-    startNode.g = startNode.h = startNode.f = 0
-    endNode = Node(None, end1)
-    endNode.g = endNode.h = endNode.f = 0
-    
-    # Initialize both open and closed list
-    openList = []
-    closedList = []
+        # Create start and end node
+        opa = self.vec2int(self.start)
+        end = self.vec2int(self.goal)
+        startNode = Node(None, start1)
+        startNode.g = startNode.h = startNode.f = 0
+        endNode = Node(None, end1)
+        endNode.g = endNode.h = endNode.f = 0
+        
+        # Initialize both open and closed list
+        openList = []
+        closedList = []
 
-    # Add the start node
-    openList.append(startNode)
+        # Add the start node
+        openList.append(startNode)
 
-    # Loop until you find the end
-    while len(openList) > 0:
+        # Loop until you find the end
+        while len(openList) > 0:
 
-        # Get the current node
-        currentNode = openList[0]
-        currentIndex = 0
-        for index, item in enumerate(openList):
-            if item.f < currentNode.f:
-                currentNode = item
-                currentIndex = index
+            # Get the current node
+            currentNode = openList[0]
+            currentIndex = 0
+            for index, item in enumerate(openList):
+                if item.f < currentNode.f:
+                    currentNode = item
+                    currentIndex = index
 
-        # Pop current off open list, add to closed list
-        openList.pop(currentIndex)
-        closedList.append(currentNode)
+            # Pop current off open list, add to closed list
+            openList.pop(currentIndex)
+            closedList.append(currentNode)
 
-        # Found the goal
-        if currentNode == endNode:
-            path = []
-            current = currentNode
-            while current is not None:
-                path.append(current.position)
-                current = current.parent
-            return path[::-1] # Return reversed path
+            # Found the goal
+            if currentNode == endNode:
+                path = []
+                current = currentNode
+                while current is not None:
+                    path.append(current.position)
+                    current = current.parent
+                return path[::-1] # Return reversed path
 
-        # Generate children
-        children = []
-        for newPosition in [(0, -1), (0, 1), (-1, 0), (1, 0), (-1, -1), (-1, 1), (1, -1), (1, 1)]: # Adjacent squares
+            # Generate children
+            children = []
+            for newPosition in [(0, -1), (0, 1), (-1, 0), (1, 0), (-1, -1), (-1, 1), (1, -1), (1, 1)]: # Adjacent squares
 
-            # Get node position
-            nodePosition = (currentNode.position[0] + newPosition[0], currentNode.position[1] + newPosition[1])
+                # Get node position
+                nodePosition = (currentNode.position[0] + newPosition[0], currentNode.position[1] + newPosition[1])
 
-            # Make sure within range
-            if nodePosition[0] > (len(maze) - 1) or nodePosition[0] < 0 or nodePosition[1] > (len(maze[len(maze)-1]) -1) or nodePosition[1] < 0:
-                continue
-
-            # Make sure walkable terrain
-            if maze[nodePosition[0]][nodePosition[1]] != 0:
-                continue
-
-            # Create new node
-            newNode = Node(currentNode, nodePosition)
-
-            # Append
-            children.append(newNode)
-
-        # Loop through children
-        for child in children:
-
-            # Child is on the closed list
-            for closedChild in closedList:
-                if child == closedChild:
+                # Make sure within range
+                if nodePosition[0] > (len(maze) - 1) or nodePosition[0] < 0 or nodePosition[1] > (len(maze[len(maze)-1]) -1) or nodePosition[1] < 0:
                     continue
 
-            # Create the f, g, and h values
-            child.g = currentNode.g + 1
-            child.h = ((child.position[0] - endNode.position[0]) ** 2) + ((child.position[1] - endNode.position[1]) ** 2)
-            child.f = child.g + child.h
-
-            # Child is already in the open list
-            for openNode in openList:
-                if child == openNode and child.g > openNode.g:
+                # Make sure walkable terrain
+                if maze[nodePosition[0]][nodePosition[1]] != 0:
                     continue
 
-            # Add the child to the open list
-            openList.append(child)
+                # Create new node
+                newNode = Node(currentNode, nodePosition)
+
+                # Append
+                children.append(newNode)
+
+            # Loop through children
+            for child in children:
+
+                # Child is on the closed list
+                for closedChild in closedList:
+                    if child == closedChild:
+                        continue
+
+                # Create the f, g, and h values
+                child.g = currentNode.g + 1
+                child.h = ((child.position[0] - endNode.position[0]) ** 2) + ((child.position[1] - endNode.position[1]) ** 2)
+                child.f = child.g + child.h
+
+                # Child is already in the open list
+                for openNode in openList:
+                    if child == openNode and child.g > openNode.g:
+                        continue
+
+                # Add the child to the open list
+                openList.append(child)
 
 class CustomDataSet(Dataset):
     def __init__(self, dataPoints):
