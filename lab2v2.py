@@ -18,7 +18,9 @@ from torch.utils.data import Dataset
 import torch.optim as optim
 import random
 import math
+import time
 vec = pygame.math.Vector2
+
 
 
 class Grid: #https:#www.youtube.com/watch?v=e3gbNOl4DiM
@@ -298,7 +300,7 @@ class WeightedGrid(Grid):
     def Cost(self, pos1, pos2):
         #calculates the cost to move between two positions
         if pos1[0] - pos2[0] > 1 or pos1[1] - pos2[1] > 1:
-            print("reeee")
+            pass
         direction = (pos1[0]-pos2[0], pos1[1], pos2[1])
         if direction in self.diagonals:
             return 1.4
@@ -396,12 +398,10 @@ class WeightedGrid(Grid):
             y = y + [b]
         return x, y
 
-
-
 class CustomDataSet(Dataset):
-    def __init__(self, dataPoints):
-        self.g = WeightedGrid(dataPoints, dataPoints)
-        X, y = self.g.RandomAStarList(dataPoints, dataPoints)
+    def __init__(self, dataPoints, size):
+        self.g = WeightedGrid(size, size)
+        X, y = self.g.RandomAStarList(dataPoints, size)
         self.X = X
         self.y = y
     
@@ -430,53 +430,56 @@ class Net(nn.Module):
 #g.loadMap("Map1.txt")
 #g.Run()
 
+#start = time.time()
+#g = CustomDataSet(200, 28)
+#end = time.time()
+#print(start - end)
+
+#textPp = "B==========D"
+net = Net(20)
+
+#Create train and test data
+train = CustomDataSet(20,20)
+test = CustomDataSet(20, 20)
+#make them sets
+trainset = torch.utils.data.DataLoader(train, batch_size=100, shuffle=True)
+testset = torch.utils.data.DataLoader(test, batch_size=10, shuffle=False)
+
+#decide loss function and optmizer
+loss_function = nn.CrossEntropyLoss()
+optimizer = optim.Adam(net.parameters(), lr=0.001)
+
+#Teach the NN
+for datasets in range(200): #10000
+    print("Epoch #", datasets)
+    train = CustomDataSet(200, 20)
+    trainset = torch.utils.data.DataLoader(train, batch_size=100, shuffle=True)
+    for epoch in range(10): # 3 full passes over the data
+        for data in trainset:  # `data` is a batch of data
+            X, y = data  # X is the batch of features, y is the batch of targets.
+            net.zero_grad()  # sets gradients to 0 before loss calc. You will do this likely every step.
+            output = net(X.view(-1,784))  # pass in the reshaped batch (recall they are 28x28 atm)
+            loss = F.nll_loss(output, y)  # calc and grab the loss value
+            loss.backward()  # apply this loss backwards thru the network's parameters
+            optimizer.step()  # attempt to optimize weights to account for loss/gradients
 
 
-# #textPp = "B==========D"
-# net = Net(20)
+# Test the NN
+net.eval() # needed?
+correct = 0
+total = 0
+with torch.no_grad():
+    for data in testset:
+        X, y = data
+        output = net(X.view(-1,784))
+        #print(output)
+        for idx, i in enumerate(output):
+            print(torch.argmax(i), y[idx])
+            if torch.argmax(i) == y[idx]:
+                correct += 1
+            total += 1
 
-# #Create train and test data
-# train = CustomDataSet(20)
-# test = CustomDataSet(20)
-# #make them sets
-# trainset = torch.utils.data.DataLoader(train, batch_size=100, shuffle=True)
-# testset = torch.utils.data.DataLoader(test, batch_size=10, shuffle=False)
-
-# #decide loss function and optmizer
-# loss_function = nn.CrossEntropyLoss()
-# optimizer = optim.Adam(net.parameters(), lr=0.001)
-
-# #Teach the NN
-# for datasets in range(200): #10000
-#     print("Epoch #", datasets)
-#     train = CustomDataSet(200)
-#     trainset = torch.utils.data.DataLoader(train, batch_size=100, shuffle=True)
-#     for epoch in range(10): # 3 full passes over the data
-#         for data in trainset:  # `data` is a batch of data
-#             X, y = data  # X is the batch of features, y is the batch of targets.
-#             net.zero_grad()  # sets gradients to 0 before loss calc. You will do this likely every step.
-#             output = net(X.view(-1,784))  # pass in the reshaped batch (recall they are 28x28 atm)
-#             loss = F.nll_loss(output, y)  # calc and grab the loss value
-#             loss.backward()  # apply this loss backwards thru the network's parameters
-#             optimizer.step()  # attempt to optimize weights to account for loss/gradients
-
-
-# # Test the NN
-# net.eval() # needed?
-# correct = 0
-# total = 0
-# with torch.no_grad():
-#     for data in testset:
-#         X, y = data
-#         output = net(X.view(-1,784))
-#         #print(output)
-#         for idx, i in enumerate(output):
-#             print(torch.argmax(i), y[idx])
-#             if torch.argmax(i) == y[idx]:
-#                 correct += 1
-#             total += 1
-
-# print("Accuracy: ", round((correct/total)*100, 3))
+print("Accuracy: ", round((correct/total)*100, 3))
 
 ## Save and load a model parameters:
 ##torch.save(net.state_dict(), PATH)
