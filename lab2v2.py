@@ -19,12 +19,11 @@ import torch.optim as optim
 import random
 import math
 import time
-vec = pygame.math.Vector2
-
+vec = pygame.Vector2
 
 
 class Grid: #https:#www.youtube.com/watch?v=e3gbNOl4DiM
-    def __init__(self, gridwidth, gridheight, start = None, goal = None, window=False):
+    def __init__(self, gridwidth=0, gridheight=0, window = False, start = None, goal = None):
         pygame.init()
         #screen
         self.window = window
@@ -256,8 +255,8 @@ class Node:
         return self.position == other.position
 
 class WeightedGrid(Grid):
-    def __init__(self, gridwidth=0, gridheight=0, start = None, goal = None, window = False):
-        super().__init__(gridwidth, gridheight, start, goal, window)
+    def __init__(self, gridwidth=0, gridheight=0, window = False, start = None, goal = None):
+        super().__init__(gridwidth, gridheight, window, start, goal)
 
     def HandleEvents(self):
         for event in pygame.event.get():
@@ -265,11 +264,17 @@ class WeightedGrid(Grid):
                 self.running = False
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_q:
+                    start = time.time_ns()
                     print("BFS!")
                     self.BFS()
+                    end = time.time_ns()
+                    print(start - end)
                 if event.key == pygame.K_w:
                     print("A*")
+                    start = time.time_ns()
                     self.AStar()
+                    end = time.time_ns()
+                    print(start - end)
                 if event.key == pygame.K_e:
                     print(self.mapList())
                 if event.key == pygame.K_r:
@@ -379,29 +384,47 @@ class WeightedGrid(Grid):
             prev = node
         return cost
     
-    def RandomAStar(self, size):
-        self = WeightedGrid(size, size)
-        start, goal = self.RandomPoints() #return (x1, y1), (x2, y2) from random points
-        self.start = start
-        self.goal = goal
-        self.AStar()
-        dist = self.PathCost()
-        theMap = self.mapList()
+    def RandomAStar(self, size, grid):
+        start0 = time.time_ns()
+        start, goal = grid.RandomPoints() #return (x1, y1), (x2, y2) from random points
+        end0 = time.time_ns()
+        print("RandomAStar - random points: ")
+        print(float(start0 - end0))
+        grid.start = start
+        grid.goal = goal
+        start1 = time.time_ns()
+        grid.AStar()
+        end1 = time.time_ns()
+        print("RandomAStar - A Star search: ")
+        print(start1 - end1)
+        start2 = time.time_ns()
+        dist = grid.PathCost()
+        end2 = time.time_ns()
+        print("RandomAStar - Path cost: ")
+        print(start2 - end2)
+        start3 = time.time_ns()
+        theMap = grid.mapList()
+        end3 = time.time_ns()
+        print("RandomAStar - maplist: ")
+        print(start3 - end3)
         return theMap, dist
     
-    def RandomAStarList(self, size, gridsize):
+    def RandomAStarList(self, size, gridsize, grid):
         x = []
         y = []
+        start = time.time()
         for i in range(size):
-            a, b = self.RandomAStar(gridsize)
+            a, b = self.RandomAStar(gridsize, grid)
             x = x + [a]
             y = y + [b]
+        end = time.time()
+        print("RandomAStarList: " + str(start - end))
         return x, y
 
 class CustomDataSet(Dataset):
     def __init__(self, dataPoints, size):
-        self.g = WeightedGrid(size, size)
-        X, y = self.g.RandomAStarList(dataPoints, size)
+        self.g = WeightedGrid(size, size, True)
+        X, y = self.g.RandomAStarList(dataPoints, size, self.g)
         self.X = X
         self.y = y
     
@@ -426,60 +449,60 @@ class Net(nn.Module):
         x = self.fc4(x)
         return F.log_softmax(x, dim=1)
 
-#g = WeightedGrid(20, 20)
-#g.loadMap("Map1.txt")
-#g.Run()
+g = WeightedGrid(20, 20, True)
+g.loadMap("Map1.txt")
+g.Run()
 
-#start = time.time()
-#g = CustomDataSet(200, 28)
-#end = time.time()
-#print(start - end)
+# start = time.time()
+# g = CustomDataSet(20, 20)
+# end = time.time()
+# print(start - end)
 
-#textPp = "B==========D"
-net = Net(20)
+# textPp = "B==========D"
+# net = Net(20)
 
-#Create train and test data
-train = CustomDataSet(20,20)
-test = CustomDataSet(20, 20)
-#make them sets
-trainset = torch.utils.data.DataLoader(train, batch_size=100, shuffle=True)
-testset = torch.utils.data.DataLoader(test, batch_size=10, shuffle=False)
+# #Create train and test data
+# train = CustomDataSet(20, 20)
+# test = CustomDataSet(20, 20)
+# #make them sets
+# trainset = torch.utils.data.DataLoader(train, batch_size=100, shuffle=True)
+# testset = torch.utils.data.DataLoader(test, batch_size=10, shuffle=False)
 
-#decide loss function and optmizer
-loss_function = nn.CrossEntropyLoss()
-optimizer = optim.Adam(net.parameters(), lr=0.001)
+# #decide loss function and optmizer
+# loss_function = nn.CrossEntropyLoss()
+# optimizer = optim.Adam(net.parameters(), lr=0.001)
 
-#Teach the NN
-for datasets in range(200): #10000
-    print("Epoch #", datasets)
-    train = CustomDataSet(200, 20)
-    trainset = torch.utils.data.DataLoader(train, batch_size=100, shuffle=True)
-    for epoch in range(10): # 3 full passes over the data
-        for data in trainset:  # `data` is a batch of data
-            X, y = data  # X is the batch of features, y is the batch of targets.
-            net.zero_grad()  # sets gradients to 0 before loss calc. You will do this likely every step.
-            output = net(X.view(-1,784))  # pass in the reshaped batch (recall they are 28x28 atm)
-            loss = F.nll_loss(output, y)  # calc and grab the loss value
-            loss.backward()  # apply this loss backwards thru the network's parameters
-            optimizer.step()  # attempt to optimize weights to account for loss/gradients
+# #Teach the NN
+# for datasets in range(200): #10000
+#     print("Epoch #", datasets)
+#     train = CustomDataSet(200, 20)
+#     trainset = torch.utils.data.DataLoader(train, batch_size=100, shuffle=True)
+#     for epoch in range(10): # 3 full passes over the data
+#         for data in trainset:  # `data` is a batch of data
+#             X, y = data  # X is the batch of features, y is the batch of targets.
+#             net.zero_grad()  # sets gradients to 0 before loss calc. You will do this likely every step.
+#             output = net(X.view(-1,784))  # pass in the reshaped batch (recall they are 28x28 atm)
+#             loss = F.nll_loss(output, y)  # calc and grab the loss value
+#             loss.backward()  # apply this loss backwards thru the network's parameters
+#             optimizer.step()  # attempt to optimize weights to account for loss/gradients
 
 
-# Test the NN
-net.eval() # needed?
-correct = 0
-total = 0
-with torch.no_grad():
-    for data in testset:
-        X, y = data
-        output = net(X.view(-1,784))
-        #print(output)
-        for idx, i in enumerate(output):
-            print(torch.argmax(i), y[idx])
-            if torch.argmax(i) == y[idx]:
-                correct += 1
-            total += 1
+# # Test the NN
+# net.eval() # needed?
+# correct = 0
+# total = 0
+# with torch.no_grad():
+#     for data in testset:
+#         X, y = data
+#         output = net(X.view(-1,784))
+#         #print(output)
+#         for idx, i in enumerate(output):
+#             print(torch.argmax(i), y[idx])
+#             if torch.argmax(i) == y[idx]:
+#                 correct += 1
+#             total += 1
 
-print("Accuracy: ", round((correct/total)*100, 3))
+# print("Accuracy: ", round((correct/total)*100, 3))
 
 ## Save and load a model parameters:
 ##torch.save(net.state_dict(), PATH)
