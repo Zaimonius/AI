@@ -219,11 +219,11 @@ class Grid: #https:#www.youtube.com/watch?v=e3gbNOl4DiM
                 for letter in line:
                     if letter != 0:
                         if letter == "X":
-                            self.walls.append(vec(i, i2))
+                            self.walls.append((i, i2))
                         elif letter == "S":
-                            self.start = vec(i, i2)
+                            self.start = (i, i2)
                         elif letter == "G":
-                            self.goal = vec(i, i2)
+                            self.goal = (i, i2)
                     i2 = i2 + 1
                 i2 = 0
                 i = i + 1
@@ -268,13 +268,17 @@ class WeightedGrid(Grid):
                     print("BFS!")
                     self.BFS()
                     end = time.time_ns()
-                    print(start - end)
+                    print("Search time: " + str(start - end))
+                    print("Search length: " + str(len(self.search)))
+                    print("Path length: " + str(len(self.path)))
                 if event.key == pygame.K_w:
                     print("A*")
                     start = time.time_ns()
                     self.AStar()
                     end = time.time_ns()
-                    print(start - end)
+                    print("Search time: " + str(start - end))
+                    print("Search length: " + str(len(self.search)))
+                    print("Path length: " + str(len(self.path)))
                 if event.key == pygame.K_e:
                     print(self.mapList())
                 if event.key == pygame.K_r:
@@ -299,7 +303,7 @@ class WeightedGrid(Grid):
         dx = abs(node1[0] - node2[0])
         dy = abs(node1[1] - node2[1])
         D = 1
-        D2 = 1 #chebyshev   #math.sqrt(2)  #octile
+        D2 = math.sqrt(2) #chebyshev   #math.sqrt(2)  #octile
         return D * (dx + dy) + (D2 - 2 * D) * min(dx, dy)
 
     def Cost(self, pos1, pos2):
@@ -349,32 +353,48 @@ class WeightedGrid(Grid):
                 return
             
             #generate neigbours
-            neighbours = []
-            for newPos in self.FindNeighbours(current.position):
-                newNode = Node(current, newPos)
-                neighbours.append(newNode)
-            
-            for neighbour in neighbours:
+            for newPos in self.FindNeighbours(current.position): #TODO check if in serach here
                 #check if neighbour already in the closed list
-                for closedNeighbour in closedList:
-                    if neighbour.position == closedNeighbour.position:
-                        continue
-                
-                #calculate the cost to get from this node to the neighbour 
-                cost = current.g + self.Cost(current.position, neighbour.position)
-                
-                #if the neighbour is already in the open list, dont add it
-                if neighbour in openList:
-                    if neighbour.g > cost: #if there is already a cost, compare which is best
-                        neighbour.g = cost
+                if newPos in self.search:
+                    pass
                 else:
-                    #else add the neighbour
-                    neighbour.g = cost
-                    openList.append(neighbour)
-                    self.search.append(neighbour.position)
-                #create all the values for h and f
-                neighbour.h = self.Heuristic(neighbour.position, endNode.position)
-                neighbour.f = neighbour.g + neighbour.h
+                    #create new node
+                    newNode = Node(current, newPos)
+                    #calculate the cost to get from this node to the neighbour
+                    cost = current.g + self.Cost(current.position, newNode.position)
+                    #if the neighbour is already in the open list, dont add it
+                    if newNode in openList:
+                        if newNode.g > cost: #if there is already a cost, compare which is best
+                            newNode.g = cost
+                    else:
+                        #else add the neighbour
+                        newNode.g = cost
+                        openList.append(newNode)
+                        self.search.append(newNode.position)
+                    #create all the values for h and f
+                    newNode.h = self.Heuristic(newNode.position, endNode.position)
+                    newNode.f = newNode.g + newNode.h
+            
+            # for neighbour in neighbours:
+            #     #check if neighbour already in the closed list
+            #     if neighbour in closedList:
+            #         pass
+            #     else:
+            #         #calculate the cost to get from this node to the neighbour 
+            #         cost = current.g + self.Cost(current.position, neighbour.position)
+                    
+            #         #if the neighbour is already in the open list, dont add it
+            #         if neighbour in openList:
+            #             if neighbour.g > cost: #if there is already a cost, compare which is best
+            #                 neighbour.g = cost
+            #         else:
+            #             #else add the neighbour
+            #             neighbour.g = cost
+            #             openList.append(neighbour)
+            #             self.search.append(neighbour.position)
+            #         #create all the values for h and f
+            #         neighbour.h = self.Heuristic(neighbour.position, endNode.position)
+            #         neighbour.f = neighbour.g + neighbour.h
 
     def PathCost(self):
         prev = self.start
