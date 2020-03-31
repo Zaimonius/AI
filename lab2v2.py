@@ -1,6 +1,7 @@
 # pip3 install torch torchvision
 # pip3 install pytmx
 # pip3 install pygame
+#jedi numpy
 
 from lab2settings import *
 from collections import *
@@ -19,6 +20,7 @@ import torch.optim as optim
 import random
 import math
 import time
+import os.path as io
 vec = pygame.Vector2
 
 
@@ -280,7 +282,13 @@ class WeightedGrid(Grid):
                     print("Search length: " + str(len(self.search)))
                     print("Path length: " + str(len(self.path)))
                 if event.key == pygame.K_e:
-                    print(self.mapList())
+                    print("A* neural")
+                    start = time.time_ns()
+                    self.AStarNet()
+                    end = time.time_ns()
+                    print("Search time: " + str(start - end))
+                    print("Search length: " + str(len(self.search)))
+                    print("Path length: " + str(len(self.path)))
                 if event.key == pygame.K_r:
                     self.start, self.goal = self.RandomPoints()
             if event.type == pygame.MOUSEBUTTONDOWN:
@@ -396,6 +404,68 @@ class WeightedGrid(Grid):
             #         neighbour.h = self.Heuristic(neighbour.position, endNode.position)
             #         neighbour.f = neighbour.g + neighbour.h
 
+    def AStarNet(self):
+        #Create start and end nodes
+        startNode = Node(None, self.start)
+        startNode.g = startNode.h = startNode.f = 0
+        endNode = Node(None, self.goal)
+        endNode.g = endNode.h = endNode.f = 0
+
+        #create open and closed list
+        openList = [startNode]
+        closedList = []
+
+        #reset the path and search lists
+        self.path = []
+        self.search = []
+
+        #create the loop
+        while len(openList) > 0:
+            #reset index and node
+            current = openList[0]
+            currentIndex = 0
+            #loop for the next index and node with the least f value
+            for index, item in enumerate(openList):
+                if item.f < current.f:
+                    current = item
+                    currentIndex = index
+            #remove the current from the open list and append it to the closed list
+            openList.pop(currentIndex)
+            closedList.append(current)
+
+            if current.position == endNode.position:
+                self.path = []
+                while current is not None:
+                    self.path.append(current.position) #prepend?
+                    current = current.parent
+                return
+            
+            #generate neigbours
+            for newPos in self.FindNeighbours(current.position): #TODO check if in serach here
+                #check if neighbour already in the closed list
+                if newPos in self.search:
+                    pass
+                else:
+                    #create new node
+                    newNode = Node(current, newPos)
+                    #calculate the cost to get from this node to the neighbour
+                    cost = current.g + self.Cost(current.position, newNode.position)
+                    #if the neighbour is already in the open list, dont add it
+                    if newNode in openList:
+                        if newNode.g > cost: #if there is already a cost, compare which is best
+                            newNode.g = cost
+                    else:
+                        #else add the neighbour
+                        newNode.g = cost
+                        openList.append(newNode)
+                        self.search.append(newNode.position)
+                    #create all the values for h and f
+
+                    #neural net setup
+                    h = HeuristicNet("neural1000.txt")
+                    newNode.h = h.neuralHeuristic(newNode.position, endNode.position)
+                    newNode.f = newNode.g + newNode.h
+
     def PathCost(self):
         prev = self.start
         cost = 0
@@ -405,45 +475,26 @@ class WeightedGrid(Grid):
         return cost
     
     def RandomAStar(self, size, grid):
-        start0 = time.time_ns()
         start, goal = grid.RandomPoints() #return (x1, y1), (x2, y2) from random points
-        end0 = time.time_ns()
-        print("RandomAStar - random points: ")
-        print(float(start0 - end0))
         grid.start = start
         grid.goal = goal
-        start1 = time.time_ns()
         grid.AStar()
-        end1 = time.time_ns()
-        print("RandomAStar - A Star search: ")
-        print(start1 - end1)
-        start2 = time.time_ns()
         dist = grid.PathCost()
-        end2 = time.time_ns()
-        print("RandomAStar - Path cost: ")
-        print(start2 - end2)
-        start3 = time.time_ns()
         theMap = grid.mapList()
-        end3 = time.time_ns()
-        print("RandomAStar - maplist: ")
-        print(start3 - end3)
         return theMap, dist
     
     def RandomAStarList(self, size, gridsize, grid):
         x = []
         y = []
-        start = time.time()
         for i in range(size):
             a, b = self.RandomAStar(gridsize, grid)
             x = x + [a]
             y = y + [b]
-        end = time.time()
-        print("RandomAStarList: " + str(start - end))
         return x, y
 
 class CustomDataSet(Dataset):
     def __init__(self, dataPoints, size):
-        self.g = WeightedGrid(size, size, True)
+        self.g = WeightedGrid(size, size, False)
         X, y = self.g.RandomAStarList(dataPoints, size, self.g)
         self.X = X
         self.y = y
@@ -457,7 +508,8 @@ class CustomDataSet(Dataset):
 class Net(nn.Module):
     def __init__(self, inputSize):
         super().__init__()
-        self.fc1 = nn.Linear(inputSize, 64)
+        self.inputSize = inputSize
+        self.fc1 = nn.Linear(inputSize * inputSize, 64)
         self.fc2 = nn.Linear(64, 64)
         self.fc3 = nn.Linear(64, 64)
         self.fc4 = nn.Linear(64, 100)
@@ -469,65 +521,111 @@ class Net(nn.Module):
         x = self.fc4(x)
         return F.log_softmax(x, dim=1)
 
+class HeuristicNet:
+    def __init__(self, filePath=None):
+        self.net = None
+        self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+        if filePath is not None and io.exists(filePath):
+            self.load(filePath)
+            self.net.to(self.device)
+            self.net.eval()
+
+    def train(self, dataPoints, size, epochs, savePath=None):
+        #create the neural net
+        self.net = Net(size)
+
+        #Create train and test data
+        train = CustomDataSet(dataPoints, size)
+        test = CustomDataSet(dataPoints, size)
+
+        #make them sets
+        trainset = torch.utils.data.DataLoader(train, batch_size=100, shuffle=True)
+        testset = torch.utils.data.DataLoader(test, batch_size=100, shuffle=False)
+
+        #decide loss function and optmizer
+        loss_function = nn.CrossEntropyLoss()
+        optimizer = optim.Adam(self.net.parameters(), lr=0.001)
+
+        #Teach the NN
+        for datasets in range(epochs):
+            print("Epoch #", datasets)
+            train = CustomDataSet(dataPoints * 10, size)
+            trainset = torch.utils.data.DataLoader(train, batch_size=100, shuffle=True)
+            for epoch in range(10): # 3 full passes over the data
+                for data in trainset:  # `data` is a batch of data
+                    X, y = data  # X is the batch of features, y is the batch of targets.
+                    self.net.zero_grad()  # sets gradients to 0 before loss calc. You will do this likely every step.
+                    output = self.net(X.view(-1, size*size))  # pass in the reshaped batch (recall they are 28x28 atm)
+                    loss = F.nll_loss(output, y)  # calc and grab the loss value
+                    loss.backward()  # apply this loss backwards thru the network's parameters
+                    optimizer.step()  # attempt to optimize weights to account for loss/gradients
+
+        # Neural network procentage test
+        self.net.eval()
+        correct = 0
+        total = 0
+        with torch.no_grad():
+            for data in testset:
+                X, y = data
+                output = self.net(X.view(-1,size*size))
+                #print(output)
+                for idx, i in enumerate(output):
+                    print(torch.argmax(i), y[idx])
+                    if torch.argmax(i) == y[idx]:
+                        correct += 1
+                    total += 1
+
+        print("Accuracy: ", round((correct/total)*100, 3))
+        self.save(savePath)
+
+    def save(self, savePath):
+        #save the neural network
+        if savePath is not None:
+            obj = {'dict': self.net.state_dict(), 'input': self.net.inputSize}
+            torch.save(obj, savePath) #save input size and dictionary
+
+
+    def load(self, loadPath):
+        #loading neural net
+        starter = torch.load(loadPath)
+        self.net = Net(starter['input']) #inputsize
+        self.net.load_state_dict(starter['dict']) # dictionary
+        self.net.eval()
+
+    def neuralHeuristic(self, start, goal):
+        g = WeightedGrid(self.net.inputSize, self.net.inputSize)
+        g.goal = goal
+        g.start = start
+        grid = g.mapList()
+        X = torch.Tensor(grid)
+        X = X.to(self.device)
+        output = self.net(X.view(-1, self.net.inputSize*self.net.inputSize))
+        output = output.cpu()
+        return int(torch.argmax(output))
+
 g = WeightedGrid(20, 20, True)
 g.loadMap("Map1.txt")
 g.Run()
 
-# start = time.time()
-# g = CustomDataSet(20, 20)
-# end = time.time()
-# print(start - end)
+#textPp = "B==========D"
 
-# textPp = "B==========D"
-# net = Net(20)
-
-# #Create train and test data
-# train = CustomDataSet(20, 20)
-# test = CustomDataSet(20, 20)
-# #make them sets
-# trainset = torch.utils.data.DataLoader(train, batch_size=100, shuffle=True)
-# testset = torch.utils.data.DataLoader(test, batch_size=10, shuffle=False)
-
-# #decide loss function and optmizer
-# loss_function = nn.CrossEntropyLoss()
-# optimizer = optim.Adam(net.parameters(), lr=0.001)
-
-# #Teach the NN
-# for datasets in range(200): #10000
-#     print("Epoch #", datasets)
-#     train = CustomDataSet(200, 20)
-#     trainset = torch.utils.data.DataLoader(train, batch_size=100, shuffle=True)
-#     for epoch in range(10): # 3 full passes over the data
-#         for data in trainset:  # `data` is a batch of data
-#             X, y = data  # X is the batch of features, y is the batch of targets.
-#             net.zero_grad()  # sets gradients to 0 before loss calc. You will do this likely every step.
-#             output = net(X.view(-1,784))  # pass in the reshaped batch (recall they are 28x28 atm)
-#             loss = F.nll_loss(output, y)  # calc and grab the loss value
-#             loss.backward()  # apply this loss backwards thru the network's parameters
-#             optimizer.step()  # attempt to optimize weights to account for loss/gradients
+#neural net inputs
+size = 28
+dataPoints = 20
+epochs = 1000
+savePath = "neural1000.txt"
 
 
-# # Test the NN
-# net.eval() # needed?
-# correct = 0
-# total = 0
-# with torch.no_grad():
-#     for data in testset:
-#         X, y = data
-#         output = net(X.view(-1,784))
-#         #print(output)
-#         for idx, i in enumerate(output):
-#             print(torch.argmax(i), y[idx])
-#             if torch.argmax(i) == y[idx]:
-#                 correct += 1
-#             total += 1
+#train 100 net
+# h = HeuristicNet()
+# h.train(dataPoints, size, 100, "neural100.txt")
 
-# print("Accuracy: ", round((correct/total)*100, 3))
+#train 1000 net
+# h = HeuristicNet()
+# h.train(dataPoints, size, epochs, savePath)
 
-## Save and load a model parameters:
-##torch.save(net.state_dict(), PATH)
-##
-##net = Net()   #TheModelClass(*args, **kwargs)
-##net.load_state_dict(torch.load(PATH))
-##net.eval()
+#train 10000 net
+# h = HeuristicNet()
+# h.train(dataPoints, size, 10000, "neural10000.txt")
+
 
