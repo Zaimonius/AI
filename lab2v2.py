@@ -24,6 +24,7 @@ import os.path as io
 vec = pygame.Vector2
 
 
+
 class Grid: #https:#www.youtube.com/watch?v=e3gbNOl4DiM
     def __init__(self, gridwidth=0, gridheight=0, window = False, start = None, goal = None):
         pygame.init()
@@ -230,7 +231,7 @@ class Grid: #https:#www.youtube.com/watch?v=e3gbNOl4DiM
                 i2 = 0
                 i = i + 1
 
-    def mapList(self, h=None, w=None):
+    def mapList(self, h=None, w=None, newStart=None):
         if h == None or w == None:
             h = self.gridheight
             w = self.gridwidth
@@ -238,7 +239,10 @@ class Grid: #https:#www.youtube.com/watch?v=e3gbNOl4DiM
         listMap = []
         for i in range(h):
             listMap = listMap + [[0]*w]
-        listMap[int(self.start[0])][int(self.start[1])] = 2
+        if newStart == None:
+            listMap[int(self.start[0])][int(self.start[1])] = 2
+        else:
+            listMap[int(newStart[0])][int(newStart[1])] = 2
         listMap[int(self.goal[0])][int(self.goal[1])] = 2
         return listMap
 
@@ -259,6 +263,7 @@ class Node:
 class WeightedGrid(Grid):
     def __init__(self, gridwidth=0, gridheight=0, window = False, start = None, goal = None):
         super().__init__(gridwidth, gridheight, window, start, goal)
+        self.h = HeuristicNet(gridwidth, gridheight, "neural10000.txt")
 
     def HandleEvents(self):
         for event in pygame.event.get():
@@ -382,27 +387,6 @@ class WeightedGrid(Grid):
                     #create all the values for h and f
                     newNode.h = self.Heuristic(newNode.position, endNode.position)
                     newNode.f = newNode.g + newNode.h
-            
-            # for neighbour in neighbours:
-            #     #check if neighbour already in the closed list
-            #     if neighbour in closedList:
-            #         pass
-            #     else:
-            #         #calculate the cost to get from this node to the neighbour 
-            #         cost = current.g + self.Cost(current.position, neighbour.position)
-                    
-            #         #if the neighbour is already in the open list, dont add it
-            #         if neighbour in openList:
-            #             if neighbour.g > cost: #if there is already a cost, compare which is best
-            #                 neighbour.g = cost
-            #         else:
-            #             #else add the neighbour
-            #             neighbour.g = cost
-            #             openList.append(neighbour)
-            #             self.search.append(neighbour.position)
-            #         #create all the values for h and f
-            #         neighbour.h = self.Heuristic(neighbour.position, endNode.position)
-            #         neighbour.f = neighbour.g + neighbour.h
 
     def AStarNet(self):
         #Create start and end nodes
@@ -460,12 +444,11 @@ class WeightedGrid(Grid):
                         openList.append(newNode)
                         self.search.append(newNode.position)
                     #create all the values for h and f
-
-                    #neural net setup
-                    h = HeuristicNet("neural1000.txt")
-                    newNode.h = h.neuralHeuristic(newNode.position, endNode.position)
+                    newNode.h = float(self.h.neuralHeuristic(self.mapList(self.h.gridheight, self.h.gridwidth, newNode.position)))
                     newNode.f = newNode.g + newNode.h
 
+                    #print("regular: " + str(self.Heuristic(newNode.position, endNode.position)) + " net: " + str(newNode.h))
+    
     def PathCost(self):
         prev = self.start
         cost = 0
@@ -474,7 +457,7 @@ class WeightedGrid(Grid):
             prev = node
         return cost
     
-    def RandomAStar(self, size, grid):
+    def RandomAStar(self, grid):
         start, goal = grid.RandomPoints() #return (x1, y1), (x2, y2) from random points
         grid.start = start
         grid.goal = goal
@@ -487,14 +470,14 @@ class WeightedGrid(Grid):
         x = []
         y = []
         for i in range(size):
-            a, b = self.RandomAStar(gridsize, grid)
+            a, b = self.RandomAStar(grid)
             x = x + [a]
             y = y + [b]
         return x, y
 
 class CustomDataSet(Dataset):
-    def __init__(self, dataPoints, size):
-        self.g = WeightedGrid(size, size, False)
+    def __init__(self, dataPoints, gridwidth, gridheight):
+        self.g = WeightedGrid(gridwidth, gridheight, False)
         X, y = self.g.RandomAStarList(dataPoints, size, self.g)
         self.X = X
         self.y = y
@@ -506,10 +489,9 @@ class CustomDataSet(Dataset):
         return torch.FloatTensor(self.X[index]),self.y[index]
 
 class Net(nn.Module):
-    def __init__(self, inputSize):
+    def __init__(self, inputheight, inputwidth):
         super().__init__()
-        self.inputSize = inputSize
-        self.fc1 = nn.Linear(inputSize * inputSize, 64)
+        self.fc1 = nn.Linear(inputheight * inputwidth, 64)
         self.fc2 = nn.Linear(64, 64)
         self.fc3 = nn.Linear(64, 64)
         self.fc4 = nn.Linear(64, 100)
@@ -522,25 +504,20 @@ class Net(nn.Module):
         return F.log_softmax(x, dim=1)
 
 class HeuristicNet:
-    def __init__(self, filePath=None):
-        self.net = None
+    def __init__(self, gridwidth=28, gridheight=28, filePath=None):
         self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
         if filePath is not None and io.exists(filePath):
             self.load(filePath)
             self.net.to(self.device)
             self.net.eval()
+        else:
+            self.gridwidth = gridwidth
+            self.gridheight = gridheight
+            self.net = Net(gridwidth, gridheight)
 
-    def train(self, dataPoints, size, epochs, savePath=None):
+    def train(self, dataPoints, epochs, savePath=None):
         #create the neural net
-        self.net = Net(size)
-
-        #Create train and test data
-        train = CustomDataSet(dataPoints, size)
-        test = CustomDataSet(dataPoints, size)
-
-        #make them sets
-        trainset = torch.utils.data.DataLoader(train, batch_size=100, shuffle=True)
-        testset = torch.utils.data.DataLoader(test, batch_size=100, shuffle=False)
+        self.net.train()
 
         #decide loss function and optmizer
         loss_function = nn.CrossEntropyLoss()
@@ -549,26 +526,26 @@ class HeuristicNet:
         #Teach the NN
         for datasets in range(epochs):
             print("Epoch #", datasets)
-            train = CustomDataSet(dataPoints * 10, size)
+            train = CustomDataSet(dataPoints, self.gridwidth, self.gridheight)
             trainset = torch.utils.data.DataLoader(train, batch_size=100, shuffle=True)
-            for epoch in range(10): # 3 full passes over the data
-                for data in trainset:  # `data` is a batch of data
-                    X, y = data  # X is the batch of features, y is the batch of targets.
-                    self.net.zero_grad()  # sets gradients to 0 before loss calc. You will do this likely every step.
-                    output = self.net(X.view(-1, size*size))  # pass in the reshaped batch (recall they are 28x28 atm)
-                    loss = F.nll_loss(output, y)  # calc and grab the loss value
-                    loss.backward()  # apply this loss backwards thru the network's parameters
-                    optimizer.step()  # attempt to optimize weights to account for loss/gradients
+            for data in trainset:  # `data` is a batch of data
+                X, y = data  # X is the batch of features, y is the batch of targets.
+                self.net.zero_grad()  # sets gradients to 0 before loss calc. You will do this likely every step.
+                output = self.net(X.view(-1,  self.gridwidth* self.gridheight))  # pass in the reshaped batch 
+                loss = F.nll_loss(output, y)  # calc and grab the loss value
+                loss.backward()  # apply this loss backwards thru the network's parameters
+                optimizer.step()  # attempt to optimize weights to account for loss/gradients
 
         # Neural network procentage test
         self.net.eval()
+        test = CustomDataSet(dataPoints, self.gridwidth, self.gridheight)
+        testset = torch.utils.data.DataLoader(test, batch_size=100, shuffle=False)
         correct = 0
         total = 0
         with torch.no_grad():
             for data in testset:
                 X, y = data
-                output = self.net(X.view(-1,size*size))
-                #print(output)
+                output = self.net(X.view(-1,self.gridwidth* self.gridheight))
                 for idx, i in enumerate(output):
                     print(torch.argmax(i), y[idx])
                     if torch.argmax(i) == y[idx]:
@@ -581,51 +558,60 @@ class HeuristicNet:
     def save(self, savePath):
         #save the neural network
         if savePath is not None:
-            obj = {'dict': self.net.state_dict(), 'input': self.net.inputSize}
+            obj = {'dict': self.net.state_dict(), 'gridwidth': self.gridwidth, 'gridheight': self.gridheight}
             torch.save(obj, savePath) #save input size and dictionary
+            print(savePath + " saved")
 
 
     def load(self, loadPath):
         #loading neural net
-        starter = torch.load(loadPath)
-        self.net = Net(starter['input']) #inputsize
-        self.net.load_state_dict(starter['dict']) # dictionary
-        self.net.eval()
+        #TODO: fix this with width x height
+        print(loadPath + " loaded")
+        load_data = torch.load(loadPath)
+        self.net = Net(load_data['gridwidth'], load_data['gridheight']) #inputsize
+        self.net.load_state_dict(load_data['dict']) # dictionary
+        self.gridwidth = load_data['gridwidth']
+        self.gridheight = load_data['gridheight']
 
-    def neuralHeuristic(self, start, goal):
-        g = WeightedGrid(self.net.inputSize, self.net.inputSize)
-        g.goal = goal
-        g.start = start
-        grid = g.mapList()
-        X = torch.Tensor(grid)
+    def neuralHeuristic(self, mapList):
+        # g = WeightedGrid(self.net.inputSize, self.net.inputSize)
+        # g.goal = goal
+        # g.start = start
+        X = torch.Tensor(mapList)
         X = X.to(self.device)
-        output = self.net(X.view(-1, self.net.inputSize*self.net.inputSize))
-        output = output.cpu()
+        output = self.net(X.view(-1, self.gridheight*self.gridwidth))
+        if torch.cuda.is_available():
+            output = output.cuda()
+        else:
+            output = output.cpu()
         return int(torch.argmax(output))
+
+
+print("cuda: " + str(torch.cuda.is_available()))
+
 
 g = WeightedGrid(20, 20, True)
 g.loadMap("Map1.txt")
 g.Run()
 
-#textPp = "B==========D"
-
 #neural net inputs
 size = 28
 dataPoints = 20
-epochs = 1000
-savePath = "neural1000.txt"
+savePath = "neural100.txt"
 
 
-#train 100 net
-# h = HeuristicNet()
-# h.train(dataPoints, size, 100, "neural100.txt")
+# #train 100 epoch net
+# h = HeuristicNet(30,30)
+# h.train(dataPoints, 100, "neural100.txt")
 
-#train 1000 net
-# h = HeuristicNet()
-# h.train(dataPoints, size, epochs, savePath)
+# #train 1000 epoch net
+# h = HeuristicNet(30,30)
+# h.train(dataPoints, 1000, "neural1000.txt")
 
-#train 10000 net
-# h = HeuristicNet()
-# h.train(dataPoints, size, 10000, "neural10000.txt")
+# #train 10000 net
+# h = HeuristicNet(30,30)
+# h.train(dataPoints, 10000, "neural10000.txt")
 
-
+# #train 100000 net
+# h = HeuristicNet(30,30)
+# h.train(dataPoints, 100000, "neural100000.txt")
