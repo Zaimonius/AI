@@ -590,9 +590,9 @@ class HeuristicNet:
 print("cuda: " + str(torch.cuda.is_available()))
 
 
-g = WeightedGrid(20, 20, True)
-g.loadMap("Map1.txt")
-g.Run()
+# g = WeightedGrid(20, 20, True)
+# g.loadMap("Map1.txt")
+# g.Run()
 
 #neural net inputs
 size = 28
@@ -601,17 +601,17 @@ savePath = "neural100.txt"
 
 
 # #train 100 epoch net
-# h = HeuristicNet(30,30)
-# h.train(dataPoints, 100, "neural100.txt")
+h = HeuristicNet(30,30)
+h.train(dataPoints, 100, "neural100.txt")
 
 # #train 1000 epoch net
-# h = HeuristicNet(30,30)
-# h.train(dataPoints, 1000, "neural1000.txt")
+h = HeuristicNet(30,30)
+h.train(dataPoints, 1000, "neural1000.txt")
 
 # #train 10000 net
-# h = HeuristicNet(30,30)
-# h.train(dataPoints, 10000, "neural10000.txt")
+h = HeuristicNet(30,30)
+h.train(dataPoints, 10000, "neural10000.txt")
 
 # #train 100000 net
-# h = HeuristicNet(30,30)
-# h.train(dataPoints, 100000, "neural100000.txt")
+h = HeuristicNet(30,30)
+h.train(dataPoints, 100000, "neural100000.txt")
